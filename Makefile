@@ -13,7 +13,7 @@ VERSION = 1.0
 SUBDIRS = source
 COMMDIRS = ../common
 TESTDIR = test
-EXTRAFLAGS = -g -I./include -lcrypto 
+EXTRAFLAGS = -g -I./include -lcrypto -lrt
 OBJDIR = obj
 
 vpath %.c $(SUBDIRS)

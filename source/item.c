@@ -12,6 +12,7 @@ static inline void item_unlock(uint32_t hv) {
 }
 
 
+mnc_item* mnc_do_get_item(const void* key, const size_t nkey);
 static void mnc_do_remove_item(mnc_item *it);
 
 RET_T mnc_items_init(void)
@@ -55,16 +56,31 @@ mnc_item *mnc_new_item(const char *key, size_t nkey, time_t exptime, int nbytes)
     it->nkey = nkey;
     it->ndata = nbytes;
     memcpy(ITEM_key(it), key, nkey);
-    it->exptime = exptime;
+    if (exptime)
+    {
+        it->exptime = exptime + current_time;   //绝对事件
+    }
+    else
+    {
+        it->exptime = 0; //never expire
+    }
 
     return it;
 }
 
 // if it hasn't been marked as expired,
 // be sure item already in the hashtable and LRU list
-mnc_item* mnc_get_item(const void* key, const size_t nkey)
-{
-    return hash_find(key, nkey);
+
+mnc_item* mnc_get_item_l(const void* key, const size_t nkey)
+{   
+    mnc_item* ret_i = NULL;
+    uint32_t hv = hash(key, nkey);
+
+    item_lock(hv);
+    ret_i = mnc_do_get_item(key, nkey);
+    item_unlock(hv); 
+
+    return ret_i;
 }
 
 
@@ -111,7 +127,7 @@ RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata)
 
     hv = hash(ITEM_key(p_it), p_it->nkey);
     item_lock(hv);
-    old_it = mnc_get_item(ITEM_key(p_it), p_it->nkey);   //检查是否已经加入链表
+    old_it = mnc_do_get_item(ITEM_key(p_it), p_it->nkey);   //检查是否已经加入链表
 
     if (p_it->ndata >= ndata) 
     {
@@ -152,16 +168,6 @@ RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata)
     return RET_YES;
 }
 
-// 不加锁的版本
-static void mnc_do_remove_item(mnc_item *it)
-{
-    if (it)
-    {
-        st_d_print("FREEING(%u)...",  
-                   hash(ITEM_key(it), it->nkey));
-        free(it);
-    }
-}
 
 void mnc_remove_item(mnc_item *it)
 {
@@ -189,16 +195,53 @@ void mnc_item_test(void)
     mnc_item* it = NULL;
     mnc_item* g_it = NULL;
 
-    it = mnc_new_item(key, key_len, 0, strlen(msg)+1);
+
+    it = mnc_new_item(key, key_len, 5, strlen(msg)+1);
     mnc_link_item_l(it);
     mnc_store_item_l(&it, msg, strlen(msg)+1);
-
-    g_it = mnc_get_item(key, key_len);
+    g_it = mnc_get_item_l(key, key_len);
     st_d_print("VALUE1:%s", ITEM_dat(g_it)); 
 
     mnc_store_item_l(&g_it, msg, strlen(msg2)+1);
-    g_it = mnc_get_item(key, key_len);
+    g_it = mnc_get_item_l(key, key_len);
     st_d_print("VALUE2:%s", ITEM_dat(g_it)); 
+
+    sleep(6);
+    assert(!mnc_get_item_l(key, key_len));
 
     return;
 }
+
+
+/**
+ * 不带锁的操作结果，用的非递归互斥锁
+ */
+
+mnc_item* mnc_do_get_item(const void* key, const size_t nkey)
+{   
+    mnc_item* ret_i = NULL;
+    uint32_t hv = hash(key, nkey);
+
+    ret_i = hash_find(key, nkey);
+
+    if (ret_i && ret_i->exptime &&  ret_i->exptime <= current_time) 
+    {
+        st_d_print("[%lx]expired", hv);
+        mnc_hash_lru_delete(ret_i);
+        mnc_do_remove_item(ret_i);
+        ret_i = NULL;
+    }
+
+    return ret_i;
+}
+
+static void mnc_do_remove_item(mnc_item *it)
+{
+    if (it)
+    {
+        st_d_print("FREEING(%lx)...",  
+                   hash(ITEM_key(it), it->nkey));
+        free(it);
+    }
+}
+

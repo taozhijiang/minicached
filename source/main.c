@@ -8,5 +8,9 @@ int main(int argc, char* argv[])
 
     mnc_item_test();
 
+    while (1)
+    {
+        sleep(3);
+    }
     return 0;
 }

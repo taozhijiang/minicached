@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-
+#include <unistd.h>
 #include <pthread.h>
 
 #include <assert.h>
@@ -26,8 +26,10 @@ typedef struct _mnc_item {
     uint8_t  nkey;   /* key len, not include null pad */
     uint8_t  ndata;  /* data len*/
 
-    uint8_t  data[];    // key + NULL + data
+    uint8_t  data[];    // key + NULL + data, [] not include in sizeof
 } mnc_item, *p_mnc_item;
+
+extern volatile time_t    current_time;
 
 #define ITEM_key(item)  ((char*) &((item)->data)) 
 #define ITEM_dat(item)  ((char*) &((item)->data) + (item)->nkey + 1 )
@@ -41,7 +43,7 @@ void mnc_item_test(void);
  * TOTAL ITEM API
  */
 mnc_item *mnc_new_item(const char *key, size_t nkey, time_t exptime, int nbytes);
-mnc_item* mnc_get_item(const void* key, const size_t nkey);
+mnc_item* mnc_get_item_l(const void* key, const size_t nkey);
 RET_T mnc_link_item_l(mnc_item *it);
 RET_T mnc_unlink_item_l(mnc_item *it);
 RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata);
