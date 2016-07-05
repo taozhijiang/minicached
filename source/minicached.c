@@ -77,6 +77,9 @@ extern RET_T mnc_init()
     if (mnc_slab_init() == RET_NO)
         exit(EXIT_FAILURE);
 
+    if (mnc_lru_init() == RET_NO)
+        exit(EXIT_FAILURE);
+
     st_d_print("INITIALIZED OK!");
 
     return RET_YES;

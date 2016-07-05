@@ -1,5 +1,5 @@
 #include "minicached.h"
-#include "hash.h"
+#include "hash_lru.h"
 
 #include "slabs.h"
 
@@ -96,7 +96,8 @@ RET_T mnc_link_item_l(mnc_item *it)
     uint32_t hv = hash(ITEM_key(it), it->nkey);
 
     item_lock(hv);
-    ret =  mnc_hash_lru_insert(it);
+    ret = mnc_hash_insert(it);
+    mnc_lru_insert(it);
     item_unlock(hv);
 
     return ret;
@@ -108,7 +109,8 @@ RET_T mnc_unlink_item_l(mnc_item *it)
     uint32_t hv = hash(ITEM_key(it), it->nkey);
 
     item_lock(hv);
-    ret = mnc_hash_lru_delete(it);
+    ret = mnc_hash_delete(it);
+    mnc_lru_delete(it);
     item_unlock(hv);
 
     return ret;
@@ -140,7 +142,10 @@ RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata)
         memcpy(ITEM_dat(p_it), dat, ndata);
         p_it->ndata = ndata;
         if (!old_it)
-            mnc_hash_lru_insert(p_it);
+        {
+            mnc_hash_insert(p_it);
+            mnc_lru_insert(p_it);
+        }
         assert(p_it == old_it);
         item_unlock(hv);
         return RET_YES;
@@ -160,13 +165,15 @@ RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata)
     if(!old_it)
     {
         assert(p_it == old_it);
-        mnc_hash_lru_delete(p_it); 
+        mnc_hash_delete(p_it); 
+        mnc_lru_delete(p_it);
     }
     mnc_do_remove_item(p_it);
 
     memcpy(ITEM_dat(new_it), dat, ndata);
 
-    mnc_hash_lru_insert(new_it);
+    mnc_hash_insert(new_it);
+    mnc_lru_insert(new_it);
     (*it) = new_it;
 
     item_unlock(hv);
@@ -203,7 +210,8 @@ mnc_item* mnc_do_get_item(const void* key, const size_t nkey)
     if (ret_i && ret_i->exptime &&  ret_i->exptime <= current_time) 
     {
         st_d_print("[%lx]expired", hv);
-        mnc_hash_lru_delete(ret_i);
+        mnc_hash_delete(ret_i);
+        mnc_lru_delete(ret_i);
         mnc_do_remove_item(ret_i);
         ret_i = NULL;
     }

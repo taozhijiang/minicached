@@ -1,5 +1,5 @@
 #include "minicached.h"
-#include "hash.h"
+#include "hash_lru.h"
 
 /* Main hash table. This is where we look except during expansion. */
 static mnc_item** primary_hashtable = 0;
@@ -59,7 +59,7 @@ static mnc_item** hash_find_pre(const void* key, const size_t nkey)
 
 /* item_lock already hold before*/
 
-RET_T mnc_hash_lru_insert(mnc_item *it)
+RET_T mnc_hash_insert(mnc_item *it)
 {
     mnc_item* head = NULL;
     uint32_t hv = hash(ITEM_key(it), it->nkey); 
@@ -74,7 +74,7 @@ RET_T mnc_hash_lru_insert(mnc_item *it)
     return RET_YES;
 }
 
-RET_T mnc_hash_lru_delete(mnc_item *it)
+RET_T mnc_hash_delete(mnc_item *it)
 {
     mnc_item **before = hash_find_pre(ITEM_key(it), it->nkey); 
     mnc_item *nxt = NULL;

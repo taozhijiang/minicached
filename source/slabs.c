@@ -1,10 +1,10 @@
 #include "slabs.h"
+#include "hash_lru.h"
 
 static size_t mem_limit = 0;     //最大内存限制
 static size_t mem_allocated = 0;  //已经使用内存
 
-#define SLAB_SZ_NUM (SZ_1M + 1)
-static slabclass_t mnc_slabclass[SLAB_SZ_NUM]; 
+slabclass_t mnc_slabclass[SLAB_SZ_TYPE]; 
 
 
 RET_T mnc_slab_init(void)
@@ -15,7 +15,7 @@ RET_T mnc_slab_init(void)
     mem_limit = 64 * SZ_1M_R;
 
     unsigned int curr_size = 64;
-    for (i=0; i<SLAB_SZ_NUM; ++i)
+    for (i=0; i<SLAB_SZ_TYPE; ++i)
     {
         mnc_slabclass[i].size = curr_size;
         mnc_slabclass[i].perslab = SZ_1M_R / mnc_slabclass[i].size;
@@ -34,7 +34,7 @@ int mnc_slabs_clsid(const size_t size)
 {
     int i = 0;
 
-    for (i=0; i<SLAB_SZ_NUM; ++i)
+    for (i=0; i<SLAB_SZ_TYPE; ++i)
     {
         if(mnc_slabclass[i].size >= size)
             return i;
@@ -44,15 +44,16 @@ int mnc_slabs_clsid(const size_t size)
     return -1;
 }
 
-static void *do_mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags);
-static RET_T do_mnc_slabs_free(void *ptr, size_t size, unsigned int id);
-static RET_T do_mnc_slabs_newslab(unsigned int id);
+static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags);
+static RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id);
+static RET_T mnc_do_slabs_newslab(unsigned int id);
+
 void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags) 
 {
     void *ret;
 
     pthread_mutex_lock(&mnc_slabclass[id].sbclass_lock); 
-    ret = do_mnc_slabs_alloc(size, id, flags);
+    ret = mnc_do_slabs_alloc(size, id, flags);
     pthread_mutex_unlock(&mnc_slabclass[id].sbclass_lock);
 
     return ret;
@@ -63,7 +64,7 @@ RET_T mnc_slabs_free(void *ptr, size_t size, unsigned int id)
     RET_T ret;
 
     pthread_mutex_lock(&mnc_slabclass[id].sbclass_lock);
-    ret = do_mnc_slabs_free(ptr, size, id);
+    ret = mnc_do_slabs_free(ptr, size, id);
     pthread_mutex_unlock(&mnc_slabclass[id].sbclass_lock);
 
     return ret;
@@ -72,16 +73,16 @@ RET_T mnc_slabs_free(void *ptr, size_t size, unsigned int id)
 
 // Internal API without lock
 
-static void *do_mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags) 
+static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags) 
 {
-    assert(id < SLAB_SZ_NUM);
+    assert(id < SLAB_SZ_TYPE);
     slabclass_t *p_class = &mnc_slabclass[id];
     mnc_item    *it;
 
     /*无空闲item*/
     if (p_class->sl_curr == 0) 
     {
-        if (do_mnc_slabs_newslab(id) == RET_NO)
+        if (mnc_do_slabs_newslab(id) == RET_NO)
             return NULL;
     }
 
@@ -101,7 +102,7 @@ static void *do_mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags
 }
 
 // 并非释放内存，而是进行初始化操作，变为缓存可用的item对象
-static RET_T do_mnc_slabs_free(void *ptr, size_t size, unsigned int id)
+static RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id)
 {
     slabclass_t *p_class;
     mnc_item    *it;
@@ -125,7 +126,7 @@ static RET_T do_mnc_slabs_free(void *ptr, size_t size, unsigned int id)
 }
 
 
-static RET_T do_mnc_slabs_newslab(unsigned int id)
+static RET_T mnc_do_slabs_newslab(unsigned int id)
 {
     slabclass_t *p_class = &mnc_slabclass[id];
     unsigned int i = 0;
@@ -179,7 +180,7 @@ static RET_T do_mnc_slabs_newslab(unsigned int id)
 
     for (i = 0; i < p_class->perslab; i++) 
     {
-        do_mnc_slabs_free(new_block, 0/*未使用*/, id);
+        mnc_do_slabs_free(new_block, 0/*未使用*/, id);
         new_block += p_class->size;
     }
 
