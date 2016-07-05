@@ -7,7 +7,7 @@
 extern RET_T mnc_items_init(void);
 extern RET_T mnc_hash_init(void);
 
-#define TM_SIG     SIGRTMIN
+#define TM_SIG     SIGUSR2
 static  time_t     realtimer_id;
 volatile time_t    current_time;
 

@@ -36,13 +36,12 @@ extern volatile time_t    current_time;
 #define ITEM_alloc_len(nkey, ndata) (sizeof(mnc_item) + nkey + 1 + ndata)
 
 extern RET_T mnc_init();
-void mnc_item_test(void);
 
 
 /**
  * TOTAL ITEM API
  */
-mnc_item *mnc_new_item(const char *key, size_t nkey, time_t exptime, int nbytes);
+mnc_item *mnc_new_item(const void *key, size_t nkey, time_t exptime, int nbytes);
 mnc_item* mnc_get_item_l(const void* key, const size_t nkey);
 RET_T mnc_link_item_l(mnc_item *it);
 RET_T mnc_unlink_item_l(mnc_item *it);

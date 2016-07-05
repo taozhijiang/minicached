@@ -1,12 +1,24 @@
 #include <stdio.h>
-
 #include "minicached.h"
+
+#include <signal.h>
 
 int main(int argc, char* argv[])
 {
-    mnc_init();
+#if 1
+    // For debug with segment fault
+    struct sigaction sa;
+    sa.sa_handler = backtrace_info;
+    sigaction(SIGSEGV, &sa, NULL);
 
-    mnc_item_test();
+    // ignore SIGPIPE
+    signal(SIGPIPE, SIG_IGN);
+    signal(SIGCHLD, SIG_IGN);
+    signal(SIGABRT, SIG_IGN);
+
+#endif
+
+    mnc_init();
 
     while (1)
     {

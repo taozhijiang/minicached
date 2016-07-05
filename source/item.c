@@ -40,7 +40,7 @@ RET_T mnc_items_init(void)
  * 带_l后缀的，是可能修改hashtable/LRU列表的，使用时候需要注意 
  */
 // 创建新的item
-mnc_item *mnc_new_item(const char *key, size_t nkey, time_t exptime, int nbytes) 
+mnc_item *mnc_new_item(const void *key, size_t nkey, time_t exptime, int nbytes) 
 {
     mnc_item *it;
     /* do_item_alloc handles its own locks */
@@ -184,36 +184,6 @@ void mnc_remove_item(mnc_item *it)
 
 /**
  * MNC_ITEM internel interface and api
- */
-
-void mnc_item_test(void)
-{
-    char* key ="桃子";
-    unsigned int key_len = strlen(key) + 1;
-    char* msg = "桃子的值还是桃子！";
-    char* msg2 = "桃子的值还是桃子他大爷的啊！";
-    mnc_item* it = NULL;
-    mnc_item* g_it = NULL;
-
-
-    it = mnc_new_item(key, key_len, 5, strlen(msg)+1);
-    mnc_link_item_l(it);
-    mnc_store_item_l(&it, msg, strlen(msg)+1);
-    g_it = mnc_get_item_l(key, key_len);
-    st_d_print("VALUE1:%s", ITEM_dat(g_it)); 
-
-    mnc_store_item_l(&g_it, msg, strlen(msg2)+1);
-    g_it = mnc_get_item_l(key, key_len);
-    st_d_print("VALUE2:%s", ITEM_dat(g_it)); 
-
-    sleep(6);
-    assert(!mnc_get_item_l(key, key_len));
-
-    return;
-}
-
-
-/**
  * 不带锁的操作结果，用的非递归互斥锁
  */
 
