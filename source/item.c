@@ -1,6 +1,8 @@
 #include "minicached.h"
 #include "hash.h"
 
+#include "slabs.h"
+
 static pthread_mutex_t *mnc_item_locks;
 
 static inline void item_lock(uint32_t hv) {
@@ -44,8 +46,12 @@ mnc_item *mnc_new_item(const void *key, size_t nkey, time_t exptime, int nbytes)
 {
     mnc_item *it;
     /* do_item_alloc handles its own locks */
-    
-    it = (mnc_item *)malloc(ITEM_alloc_len(nkey, nbytes));
+
+    int class_id = mnc_slabs_clsid(ITEM_alloc_len(nkey, nbytes));
+    if (class_id < 0)
+        return NULL;
+
+    it = (mnc_item *)mnc_slabs_alloc(ITEM_alloc_len(nkey, nbytes), class_id, 0);
     if (!it)
     {
         st_d_error("Malloc for item error!");
@@ -211,7 +217,11 @@ static void mnc_do_remove_item(mnc_item *it)
     {
         st_d_print("FREEING(%lx)...",  
                    hash(ITEM_key(it), it->nkey));
-        free(it);
+        
+        mnc_slabs_free(it, 
+                   ITEM_alloc_len(it->nkey, it->ndata), it->slabs_clsid);
     }
+
+    return;
 }
 

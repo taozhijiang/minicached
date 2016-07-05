@@ -123,7 +123,6 @@ static inline void backtrace_info(int param)
     }while(0)
 
 
-
 #ifdef __cplusplus 
 }
 #endif //__cplusplus 

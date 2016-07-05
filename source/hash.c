@@ -5,6 +5,8 @@
 static mnc_item** primary_hashtable = 0;
 hash_func hash;
 
+volatile unsigned int hash_item_count = 0;
+
 RET_T mnc_hash_init(void)
 {
     // using jenkins_hash
@@ -65,6 +67,10 @@ RET_T mnc_hash_lru_insert(mnc_item *it)
     primary_hashtable[hv & hashmask(HASH_POWER)]; 
     it->h_next = primary_hashtable[hv & hashmask(HASH_POWER)] = it;
 
+    it->it_flags |= ITEM_LINKED;
+
+    __sync_add_and_fetch(&hash_item_count, 1);
+
     return RET_YES;
 }
 
@@ -78,6 +84,10 @@ RET_T mnc_hash_lru_delete(mnc_item *it)
         nxt = (*before)->h_next;
         (*before)->h_next = 0;   /* probably pointless, but whatever. */
         *before = nxt;
+
+        nxt->it_flags &= ~ITEM_LINKED;
+
+        __sync_sub_and_fetch(&hash_item_count, 1);
 
         return RET_YES;
     }

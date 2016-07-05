@@ -1,5 +1,6 @@
 #include "minicached.h"
 #include "hash.h"
+#include "slabs.h"
 
 #include <signal.h>
 #include <time.h>
@@ -71,6 +72,9 @@ extern RET_T mnc_init()
         exit(EXIT_FAILURE);
 
     if(mnc_timer_init() == RET_NO)
+        exit(EXIT_FAILURE);
+
+    if (mnc_slab_init() == RET_NO)
         exit(EXIT_FAILURE);
 
     st_d_print("INITIALIZED OK!");

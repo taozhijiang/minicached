@@ -12,6 +12,13 @@
 
 #include "st_others.h"
 
+#ifdef __cplusplus 
+extern "C" {
+#endif //__cplusplus 
+
+#define ITEM_LINKED    0x01
+#define ITEM_SLABBED   0x02
+
 /**
  * 不仅仅是头部，负载也放置到这个结构体里面 
  * dat中只考虑二进制情况，所以数据如果本身带NULL，也需要计入， 
@@ -21,12 +28,19 @@ typedef struct _mnc_item {
     time_t      time;       /* least recent access */
     time_t      exptime;    /* expire time */
 
-    struct _mnc_item   *h_next; // hash链表
+                            /* Protected by sbclass_lock */
+    struct _mnc_item *next;
+    struct _mnc_item *prev;
 
-    uint8_t  nkey;   /* key len, not include null pad */
-    uint8_t  ndata;  /* data len*/
+    struct _mnc_item *h_next; // hash链表
 
-    uint8_t  data[];    // key + NULL + data, [] not include in sizeof
+    uint8_t     slabs_clsid;/* which slab class we're in */
+    uint8_t     it_flags;   /* ITEM_* above */
+
+    uint8_t     nkey;   /* key len, not include null pad, max 255 */
+    uint32_t    ndata;  /* data len, max 1M*/
+
+    uint8_t     data[];    // key + NULL + data, [] not include in sizeof
 } mnc_item, *p_mnc_item;
 
 extern volatile time_t    current_time;
@@ -47,5 +61,9 @@ RET_T mnc_link_item_l(mnc_item *it);
 RET_T mnc_unlink_item_l(mnc_item *it);
 RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata);
 void mnc_remove_item(mnc_item *it);
+
+#ifdef __cplusplus 
+}
+#endif //__cplusplus 
 
 #endif
