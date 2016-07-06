@@ -58,6 +58,7 @@ static RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id);
 static RET_T mnc_do_slabs_destroy(mnc_item* it, unsigned int id);
 static RET_T mnc_do_slabs_newslab(unsigned int id);
 static RET_T mnc_do_slabs_recycle(unsigned int id, double stress);
+static RET_T mnc_do_slabs_force_lru(unsigned int id);
 
 void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags) 
 {
@@ -96,16 +97,14 @@ static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags
     {
         if (mnc_do_slabs_newslab(id) == RET_NO)
         {
-            st_d_print("TRYING RECYCLE MEMORY WITH STRESS %f !", 2.0);
+            st_d_print("TRYING RECYCLE MEMORY WITH STRESS %f !", 3.0);
 
             for (i=0; i<SLAB_SZ_TYPE; ++i)
             {
-                if (i == id)
-                    continue;
-                else
+                if (i != id)
                 {
                     pthread_mutex_lock(&mnc_slabclass[i].sbclass_lock);
-                    mnc_do_slabs_recycle(i, 2.0);
+                    mnc_do_slabs_recycle(i, 3.0);
                     pthread_mutex_unlock(&mnc_slabclass[i].sbclass_lock);
                 }
             }
@@ -120,9 +119,7 @@ static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags
 
             for (i=0; i<SLAB_SZ_TYPE; ++i)
             {
-                if (i == id)
-                    continue;
-                else
+                if (i != id)
                 {
                     pthread_mutex_lock(&mnc_slabclass[i].sbclass_lock);
                     mnc_do_slabs_recycle(i, 1.2);
@@ -134,7 +131,10 @@ static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags
             goto alloc_ok;
 
         if (mnc_do_slabs_newslab(id) == RET_NO)
-            return NULL;
+        {
+            if(mnc_do_slabs_force_lru(id) == RET_NO)
+                return NULL;
+        }
     }
 
 alloc_ok:
@@ -308,7 +308,8 @@ static RET_T mnc_do_slabs_newslab(unsigned int id)
  * 当slab_free之后，实际的item还是处于ITEM_SLABBED的状态，占用着内存。当 
  * ITEM_SLABBED的数目足够多，而有需要内存的时候，可以释放部分SLABBED对象 
  *  
- * stress是释放压力 
+ * stress是释放压力，之所以要设置stress参数，是想分层，优先释放占用空闲 
+ * slabs较多的class 
  *  
  *  没有挂到HASH表中，所以不用hash锁
  *  需要持有每个slab_class的锁
@@ -319,6 +320,8 @@ static RET_T mnc_do_slabs_recycle(unsigned int id, double stress)
     unsigned int i = 0;
     unsigned int j = 0, k = 0;
     uint32_t hv = 0;
+
+    assert(stress > 1.0);
 
     if (p_class->sl_curr < p_class->perslab * stress) 
         return RET_NO;
@@ -379,13 +382,87 @@ static RET_T mnc_do_slabs_recycle(unsigned int id, double stress)
 
     }
 
-    st_d_print("GOOD, Free page: %p", ptr_free);
+    st_d_print("GOOD, Free Block Page: %p", ptr_free);
     free(ptr_free);
     -- p_class->slabs;
     mem_allocated -= p_class->size * p_class->perslab;
 
+    st_d_print("total memory: %lu, already used memory:%lu", mem_limit, mem_allocated); 
+
     return RET_YES;
 }
+
+/**
+ * 最严厉的释放操作，可能释放仅有的空余slab，然后newslab
+ * 或者查找相同class_id的lru，去除最不常用的item 
+ *  
+ * 不行，就返回空 
+ */
+static RET_T mnc_do_slabs_force_lru(unsigned int id)
+{
+    slabclass_t *p_class = &mnc_slabclass[id];
+    unsigned int i = 0;
+    unsigned int j = 0;
+
+    slabclass_t *p_class_free = NULL;
+    mnc_item* it_free = NULL;
+
+    // STAGE-1 查看是否有完全空余slab
+    bool get_slab = false;
+    for (i=0; i<SLAB_SZ_TYPE; ++i)
+    {
+        if (i != id)
+        {
+            pthread_mutex_lock(&mnc_slabclass[i].sbclass_lock);
+            if (&mnc_slabclass[i].sl_curr == &mnc_slabclass[i].perslab) 
+            {
+                get_slab = true;
+                p_class_free = &mnc_slabclass[i];
+                assert(p_class_free->slabs == 1);
+                st_d_print("FREE THE ONLY SLAB for class_id=%d", i);
+
+                for (j=0; j<p_class_free->perslab; ++j) // free last block
+                {
+                    it_free = (mnc_item *)((char *)p_class_free->slab_list[0] + 
+                                           j * p_class_free->size); 
+                    assert( it_free->it_flags & ITEM_SLABBED );
+                    mnc_do_slabs_destroy(it_free, i);
+                }
+
+                st_d_print("GOOD, Free Block Page: %p", p_class_free->slab_list[0]); 
+                free(p_class_free->slab_list[0]);
+                -- p_class_free->slabs;
+                mem_allocated -= p_class_free->size * p_class_free->perslab;
+
+                st_d_print("total memory: %lu, already used memory:%lu", mem_limit, mem_allocated); 
+
+                //because of the harmful, break AAP
+                break;
+            }
+
+            pthread_mutex_unlock(&mnc_slabclass[i].sbclass_lock);
+        }
+    }
+
+    if (get_slab)
+    {
+        return mnc_do_slabs_newslab(id);
+    }
+
+    // STAGE-II free lru
+    if (p_class->slabs == 0)
+        return RET_NO;
+    
+    it_free = mnc_do_lru_last(id);
+    if (!it_free)
+        return RET_NO;
+
+    mnc_hash_delete(it_free);
+    mnc_lru_delete(it_free);
+
+    return RET_YES;
+}
+
 
 void mnc_class_statistic(unsigned int id)
 {

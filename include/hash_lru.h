@@ -57,6 +57,7 @@ RET_T mnc_hash_delete(mnc_item *it);
 RET_T mnc_lru_init(void);
 RET_T mnc_lru_insert(mnc_item *it);
 RET_T mnc_lru_delete(mnc_item *it);
+extern mnc_item* mnc_do_lru_last(unsigned int id);
 
 #ifdef __cplusplus 
 }

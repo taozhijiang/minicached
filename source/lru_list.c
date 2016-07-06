@@ -58,7 +58,7 @@ static RET_T mnc_do_lru_insert(mnc_item *it)
     assert((it->it_flags & ITEM_SLABBED) == 0);
 
     head = &lru_heads[it->slabs_clsid];
-    tail = &lru_heads[it->slabs_clsid];
+    tail = &lru_tails[it->slabs_clsid];
 
     assert(it != *head);
     assert((*head && *tail) || (*head == 0 && *tail == 0));
@@ -79,7 +79,7 @@ static RET_T mnc_do_lru_delete(mnc_item *it)
 {
     mnc_item **head, **tail;
     head = &lru_heads[it->slabs_clsid];
-    tail = &lru_heads[it->slabs_clsid];
+    tail = &lru_tails[it->slabs_clsid];
 
     if (*head == it) {
         assert(it->prev == 0);
@@ -100,4 +100,12 @@ static RET_T mnc_do_lru_delete(mnc_item *it)
         it->prev->next = it->next;
 
     return RET_YES;
+}
+
+extern mnc_item* mnc_do_lru_last(unsigned int id)
+{
+    if (lru_tails[id])
+        return lru_tails[id];
+
+    return NULL;
 }
