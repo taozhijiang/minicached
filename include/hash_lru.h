@@ -28,11 +28,19 @@ extern hash_func hash;
 #define hashsize(n) ((unsigned long int)1<<(n))
 #define hashmask(n) (hashsize(n)-1)
 
+
+extern pthread_mutex_t *mnc_item_locks;
+static inline void item_lock(uint32_t hv) {
+    pthread_mutex_lock(&mnc_item_locks[hv & hashmask(HASH_POWER)]);
+}
+
+static inline void item_unlock(uint32_t hv) {
+    pthread_mutex_unlock(&mnc_item_locks[hv & hashmask(HASH_POWER)]);
+}
+
 extern RET_T mnc_hash_init(void);
 
 mnc_item* hash_find(const void* key, const size_t nkey);
-
-
 RET_T mnc_hash_insert(mnc_item *it);
 RET_T mnc_hash_delete(mnc_item *it);
 

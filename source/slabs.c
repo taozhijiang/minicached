@@ -52,8 +52,12 @@ unsigned int mnc_item_slab_size(const mnc_item* it)
 }
 
 static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags);
+static RET_T mnc_do_slabs_move(mnc_item* it_src, mnc_item* it_des, 
+                               unsigned int id);
 static RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id);
+static RET_T mnc_do_slabs_destroy(mnc_item* it, unsigned int id);
 static RET_T mnc_do_slabs_newslab(unsigned int id);
+static RET_T mnc_do_slabs_recycle(unsigned int id, double stress);
 
 void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags) 
 {
@@ -85,13 +89,55 @@ static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags
     assert(id < SLAB_SZ_TYPE);
     slabclass_t *p_class = &mnc_slabclass[id];
     mnc_item    *it;
+    unsigned int i = 0;
 
     /*无空闲item*/
     if (p_class->sl_curr == 0) 
     {
         if (mnc_do_slabs_newslab(id) == RET_NO)
+        {
+            st_d_print("TRYING RECYCLE MEMORY WITH STRESS %f !", 2.0);
+
+            for (i=0; i<SLAB_SZ_TYPE; ++i)
+            {
+                if (i == id)
+                    continue;
+                else
+                {
+                    pthread_mutex_lock(&mnc_slabclass[i].sbclass_lock);
+                    mnc_do_slabs_recycle(i, 2.0);
+                    pthread_mutex_unlock(&mnc_slabclass[i].sbclass_lock);
+                }
+            }
+        }
+        else
+            goto alloc_ok;
+
+        // TRY AGAIN
+        if (mnc_do_slabs_newslab(id) == RET_NO)
+        {
+            st_d_print("TRYING RECYCLE MEMORY WITH STRESS %f !", 1.2);
+
+            for (i=0; i<SLAB_SZ_TYPE; ++i)
+            {
+                if (i == id)
+                    continue;
+                else
+                {
+                    pthread_mutex_lock(&mnc_slabclass[i].sbclass_lock);
+                    mnc_do_slabs_recycle(i, 1.2);
+                    pthread_mutex_unlock(&mnc_slabclass[i].sbclass_lock);
+                }
+            }
+        }
+        else
+            goto alloc_ok;
+
+        if (mnc_do_slabs_newslab(id) == RET_NO)
             return NULL;
     }
+
+alloc_ok:
 
     assert(p_class->sl_curr);
 
@@ -133,6 +179,67 @@ static RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id)
     return RET_YES;
 }
 
+static RET_T mnc_do_slabs_destroy(mnc_item* it, unsigned int id)
+{
+    slabclass_t *p_class;
+    p_class = &mnc_slabclass[id];
+    
+    // 确保释放的是没有保存数据的
+    assert(it->it_flags & ITEM_SLABBED);
+
+    it->it_flags = ITEM_SLABBED;
+    it->slabs_clsid = 0;    //将会在申请的时候重新初始化
+
+    // 从空闲链表中删除
+    if (p_class->slots == it)
+    {
+        p_class->slots = it->next;
+        if (it->next)
+            it->next->prev = 0; // already the head one
+    }
+    else
+    {
+        if (it->next)
+            it->next->prev = it->prev;
+        if (it->prev)
+            it->prev->next = it->next;
+    }
+
+    p_class->sl_curr--;
+
+    return RET_YES;
+}
+
+/**
+ * 调用的函数负责hv加锁
+ */
+static RET_T mnc_do_slabs_move(mnc_item* it_src, mnc_item* it_des, 
+                               unsigned int id)
+{
+    slabclass_t *p_class;
+    p_class = &mnc_slabclass[id];
+    
+    assert(it_src && it_des);
+    assert(it_src->it_flags & ITEM_LINKED);
+    assert(it_des->it_flags & ITEM_SLABBED);
+
+    it_src->it_flags &= ~ITEM_LINKED;
+    mnc_hash_delete(it_src);
+    mnc_lru_delete(it_src);
+
+    it_des->time = it_src->time;
+    it_des->exptime = it_src->exptime;
+    it_des->slabs_clsid = it_src->slabs_clsid;
+    it_des->it_flags &= ~ITEM_SLABBED;
+    it_des->nkey = it_src->nkey;
+    it_des->ndata = it_src->ndata;
+
+    memcpy(it_des->data, it_src->data, p_class->size);
+    mnc_hash_insert(it_des);
+    mnc_lru_insert(it_des);
+
+    return RET_YES;
+}
 
 static RET_T mnc_do_slabs_newslab(unsigned int id)
 {
@@ -195,6 +302,90 @@ static RET_T mnc_do_slabs_newslab(unsigned int id)
     return RET_YES;
 }
 
+/**
+ * 内存回收类函数 
+ *  
+ * 当slab_free之后，实际的item还是处于ITEM_SLABBED的状态，占用着内存。当 
+ * ITEM_SLABBED的数目足够多，而有需要内存的时候，可以释放部分SLABBED对象 
+ *  
+ * stress是释放压力 
+ *  
+ *  没有挂到HASH表中，所以不用hash锁
+ *  需要持有每个slab_class的锁
+ */
+static RET_T mnc_do_slabs_recycle(unsigned int id, double stress)
+{
+    slabclass_t *p_class = &mnc_slabclass[id];
+    unsigned int i = 0;
+    unsigned int j = 0, k = 0;
+    uint32_t hv = 0;
+
+    if (p_class->sl_curr < p_class->perslab * stress) 
+        return RET_NO;
+    
+    assert(p_class->slabs > 1);
+
+    // DO IT!
+
+    // 需要释放的块指针
+    void *ptr_free = p_class->slab_list[p_class->slabs-1];
+    mnc_item* it_free = NULL;
+
+    // 空余slot查找用
+    void *ptr_des = NULL;
+    mnc_item* it_tmp = NULL;
+    mnc_item* it_des = NULL;
+
+    for (i=0; i<p_class->perslab; ++i) // free last block
+    {
+        it_free = (mnc_item *) ((char *)ptr_free + i*p_class->size);
+        if( it_free->it_flags & ITEM_SLABBED )
+        {
+            mnc_do_slabs_destroy(it_free, id);
+        }
+        else if (it_free->it_flags & ITEM_LINKED) 
+        {
+            hv = hash(ITEM_key(it_free), it_free->nkey); 
+
+            //寻找空余的slot
+            for (j=0; j<(p_class->slabs-1); ++j) 
+            {
+                ptr_des = p_class->slab_list[j];
+                for (k=0; k<p_class->perslab; ++k)
+                {
+                    it_tmp = (mnc_item *) ((char *)ptr_des + k*p_class->size);
+                    if (it_tmp->it_flags & ITEM_SLABBED) 
+                    {
+                        it_des = it_tmp;
+                        break;
+                    }
+                }
+
+                if (it_des)
+                    break;
+            }
+
+            assert(it_des);
+
+            item_lock(hv);
+            mnc_do_slabs_move(it_free, it_des, id);
+            mnc_do_slabs_destroy(it_free, id);
+            item_unlock(hv);
+        }
+        else
+        {
+            SYS_ABORT("ERROR!!!!!");
+        }
+
+    }
+
+    st_d_print("GOOD, Free page: %p", ptr_free);
+    free(ptr_free);
+    -- p_class->slabs;
+    mem_allocated -= p_class->size * p_class->perslab;
+
+    return RET_YES;
+}
 
 void mnc_class_statistic(unsigned int id)
 {

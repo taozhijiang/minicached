@@ -5,6 +5,7 @@ RET_T mnc_item_test_int_key(void);
 RET_T mnc_item_test_char_key(void);
 RET_T mnc_item_test_lru_touch(void);
 RET_T mnc_outof_memory_test(void);
+RET_T mnc_recycle_memory_test(void);
 
 RET_T mnc_item_test_int_key(void)
 {
@@ -121,7 +122,8 @@ RET_T mnc_outof_memory_test(void)
     unsigned int i = 0;
     int key = 0x1;
     mnc_item* it = NULL;
-    char* msg = "NULL MESSAGE HERE 阿拉丁.....";
+    char* msg_fmt = "[%s]{%ld} TEST INFO....";
+    char msg[512];
 
     for (i=0; i<20; i++)
     {
@@ -129,6 +131,7 @@ RET_T mnc_outof_memory_test(void)
         if (!it)
             break;
 
+        sprintf(msg, msg_fmt, __FUNCTION__, i);
         mnc_store_item_l(&it, msg, strlen(msg) + 1);
         mnc_class_statistic(it->slabs_clsid); 
 
@@ -137,6 +140,47 @@ RET_T mnc_outof_memory_test(void)
 
     key = 0x1;
     for (i=0; i<20; i++)
+    {
+        it = mnc_get_item_l(&key, sizeof(int));
+        if (!it)
+            break;
+
+        mnc_class_statistic(it->slabs_clsid); 
+        mnc_unlink_item_l(it); 
+        st_d_print("[%d]%s", (*(int *)ITEM_key(it)), (char *)ITEM_dat(it));
+
+        mnc_remove_item(it);
+
+        ++key;
+    }
+
+    return RET_YES;
+}
+
+// JUST RUN AFTER mnc_outof_memory_test above
+RET_T mnc_recycle_memory_test(void)
+{
+    unsigned int i = 0;
+    int key = 0x1;
+    mnc_item* it = NULL;
+    char* msg_fmt = "[%s]{%ld} TEST INFO....";
+    char msg[512];
+
+    for (i=0; i<40; i++)
+    {
+        it = mnc_new_item(&key, sizeof(int), 0, 256*1024-sizeof(mnc_item)-sizeof(int)-1);
+        if (!it)
+            break;
+
+        sprintf(msg, msg_fmt, __FUNCTION__, i);
+        mnc_store_item_l(&it, msg, strlen(msg) + 1);
+        mnc_class_statistic(it->slabs_clsid); 
+
+        ++key;
+    }
+
+    key = 0x1;
+    for (i=0; i<40; i++)
     {
         it = mnc_get_item_l(&key, sizeof(int));
         if (!it)

@@ -3,16 +3,7 @@
 
 #include "slabs.h"
 
-static pthread_mutex_t *mnc_item_locks;
-
-static inline void item_lock(uint32_t hv) {
-    pthread_mutex_lock(&mnc_item_locks[hv & hashmask(HASH_POWER)]);
-}
-
-static inline void item_unlock(uint32_t hv) {
-    pthread_mutex_unlock(&mnc_item_locks[hv & hashmask(HASH_POWER)]);
-}
-
+pthread_mutex_t *mnc_item_locks;
 
 mnc_item* mnc_do_get_item(const void* key, const size_t nkey);
 static void mnc_do_remove_item(mnc_item *it);
