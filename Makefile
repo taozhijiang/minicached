@@ -13,7 +13,7 @@ VERSION = 1.0
 SUBDIRS = source
 COMMDIRS = ../common
 TESTDIR = testsrc
-EXTRAFLAGS = -g -I./include -lcrypto -lrt
+EXTRAFLAGS = -g -I./include -lcrypto -lrt -ljson-c
 OBJDIR = obj
 
 vpath %.c $(SUBDIRS)

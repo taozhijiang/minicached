@@ -26,7 +26,7 @@ RET_T mnc_items_init(void)
     mnc_item_locks = (pthread_mutex_t *)calloc(item_cnt, sizeof(pthread_mutex_t));
     if (!mnc_item_locks) 
     {
-        st_d_error("Calloc for item failed! [%d*%d]!", sizeof(pthread_mutex_t), item_cnt);
+        st_d_error("Calloc for item failed! [%d*%lu]!", sizeof(pthread_mutex_t), item_cnt);
         return RET_NO;
     }
 
@@ -164,7 +164,7 @@ RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata)
     mnc_item *new_it = mnc_new_item(ITEM_key(p_it), p_it->nkey, p_it->exptime, ndata); 
     if (!new_it)
     {
-        st_d_error("新分配错误%d！", ndata);
+        st_d_error("新分配错误%lu！", ndata);
         item_unlock(hv);
         return RET_NO;
     }

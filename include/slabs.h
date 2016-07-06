@@ -27,7 +27,8 @@ typedef struct {
     unsigned int slab_list_size; /* size of prev array */
 
     size_t requested;      /* The number of requested bytes */
-                            // 当前class类别已经被缓存的对象占用的字节数目
+                            // 当前class类别已经被缓存的对象占用的字节数目，
+                            // 实际负载的字节数目
 
     pthread_mutex_t sbclass_lock; 
 
@@ -40,6 +41,7 @@ int mnc_slabs_clsid(const size_t size);
 RET_T mnc_slabs_free(void *ptr, size_t size, unsigned int id);
 void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags);
 
+void mnc_class_statistic(unsigned int id);
 unsigned int mnc_item_slab_size(const mnc_item* it);
 
 #ifdef __cplusplus 

@@ -1,7 +1,7 @@
 #include "slabs.h"
 #include "hash_lru.h"
 
-static size_t mem_limit = 0;     //最大内存限制
+size_t mem_limit = 0;     //最大内存限制
 static size_t mem_allocated = 0;  //已经使用内存
 
 slabclass_t mnc_slabclass[SLAB_SZ_TYPE]; 
@@ -12,9 +12,7 @@ RET_T mnc_slab_init(void)
     unsigned int i = 0;
     memset(mnc_slabclass, 0, sizeof(mnc_slabclass));
 
-    mem_limit = 64 * SZ_1M_R;
-
-    unsigned int curr_size = 64;
+    unsigned int curr_size = 64;    //最小item size
     for (i=0; i<SLAB_SZ_TYPE; ++i)
     {
         mnc_slabclass[i].size = curr_size;
@@ -25,6 +23,8 @@ RET_T mnc_slab_init(void)
         pthread_mutex_init(&mnc_slabclass[i].sbclass_lock, NULL);
         curr_size = curr_size << 1;
     }
+
+    mem_allocated = 0;
 
     return RET_YES;
 }
@@ -40,7 +40,7 @@ int mnc_slabs_clsid(const size_t size)
             return i;
     }
 
-    st_d_error("TOO LARGE: %d", size);
+    st_d_error("TOO LARGE: %lu", size);
     return -1;
 }
 
@@ -104,7 +104,7 @@ static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags
     it->slabs_clsid = id;
     p_class->sl_curr --;
 
-    p_class->requested -= size;
+    p_class->requested += size;
 
     return it;
 }
@@ -142,7 +142,7 @@ static RET_T mnc_do_slabs_newslab(unsigned int id)
     
     if (( slab_len + mem_allocated) > mem_limit) 
     {
-        st_d_error("out of memory: already %d, request %d, total %d", mem_allocated,
+        st_d_error("out of memory: already %lu, request %d, total %lu", mem_allocated,
                    p_class->perslab * p_class->size, mem_limit);
         return RET_NO; 
     }
@@ -193,5 +193,25 @@ static RET_T mnc_do_slabs_newslab(unsigned int id)
     }
 
     return RET_YES;
+}
+
+
+void mnc_class_statistic(unsigned int id)
+{
+    slabclass_t* p_class = &mnc_slabclass[id];
+
+    st_d_print("=========================================");
+    st_d_print("class_id: %lu", id);
+    st_d_print("item size: %x", p_class->size);
+    st_d_print("perslab count: %lu", p_class->perslab); 
+    st_d_print("free count: %lu", p_class->sl_curr); 
+    st_d_print("alloc slab count: %lu", p_class->slabs); 
+    st_d_print("slab list ptr count: %lu", p_class->slab_list_size); 
+    st_d_print("requested bytes: %lu", p_class->requested);
+
+    st_d_print("total memory: %lu, already used memory:%lu", mem_limit, mem_allocated); 
+    st_d_print("=========================================");
+
+    return;
 }
 

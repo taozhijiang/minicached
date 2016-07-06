@@ -1,24 +1,10 @@
 #include "minicached.h"
 #include "hash_lru.h"
 
-RET_T mnc_item_test_char_key(void);
 RET_T mnc_item_test_int_key(void);
+RET_T mnc_item_test_char_key(void);
 RET_T mnc_item_test_lru_touch(void);
-
-int main(int argc, char* argv[])
-{
-    mnc_init();
-
-    st_d_print("========================");
-    mnc_item_test_int_key();
-    mnc_item_test_char_key();
-
-    while (1)
-    {
-        sleep(3);
-    }
-    return 0;
-}
+RET_T mnc_outof_memory_test(void);
 
 RET_T mnc_item_test_int_key(void)
 {
@@ -120,9 +106,50 @@ RET_T mnc_item_test_lru_touch(void)
 
     st_d_print("BEFORE:%lu AFTER:%lu", t1, it->time);
 
+    mnc_unlink_item_l(it);
     mnc_remove_item(it);
     
     st_d_print("%s PASS!", __FUNCTION__);
+
+    return RET_YES;
+}
+
+
+RET_T mnc_outof_memory_test(void)
+{
+    // 10M -> 20*512K
+    unsigned int i = 0;
+    int key = 0x1;
+    mnc_item* it = NULL;
+    char* msg = "NULL MESSAGE HERE 阿拉丁.....";
+
+    for (i=0; i<20; i++)
+    {
+        it = mnc_new_item(&key, sizeof(int), 0, 512*1024-sizeof(mnc_item)-sizeof(int)-1);
+        if (!it)
+            break;
+
+        mnc_store_item_l(&it, msg, strlen(msg) + 1);
+        mnc_class_statistic(it->slabs_clsid); 
+
+        ++key;
+    }
+
+    key = 0x1;
+    for (i=0; i<20; i++)
+    {
+        it = mnc_get_item_l(&key, sizeof(int));
+        if (!it)
+            break;
+
+        mnc_class_statistic(it->slabs_clsid); 
+        mnc_unlink_item_l(it); 
+        st_d_print("[%d]%s", (*(int *)ITEM_key(it)), (char *)ITEM_dat(it));
+
+        mnc_remove_item(it);
+
+        ++key;
+    }
 
     return RET_YES;
 }

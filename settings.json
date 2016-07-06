@@ -1,0 +1,6 @@
+{
+    "settings":
+    {
+        "total_mem": 10,        // memory size, unit MB
+    }
+}

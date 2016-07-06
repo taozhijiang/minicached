@@ -74,7 +74,7 @@ RET_T mnc_hash_insert(mnc_item *it)
     it->time = current_time;
 
     __sync_add_and_fetch(&hash_item_count, 1);
-    st_d_print("CURRENT CNT: %d", hash_item_count);
+    st_d_print("HASH CURRENT CNT: %d", hash_item_count);
 
     return RET_YES;
 }
@@ -93,7 +93,7 @@ RET_T mnc_hash_delete(mnc_item *it)
         *before = nxt;
 
         __sync_sub_and_fetch(&hash_item_count, 1);
-        st_d_print("CURRENT CNT: %d", hash_item_count);
+        st_d_print("HASH CURRENT CNT: %d", hash_item_count);
 
         return RET_YES;
     }
