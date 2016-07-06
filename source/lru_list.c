@@ -102,6 +102,22 @@ static RET_T mnc_do_lru_delete(mnc_item *it)
     return RET_YES;
 }
 
+extern mnc_item* mnc_do_fetch_expired(unsigned int id)
+{
+    mnc_item *ptr = lru_heads[id];
+
+    for (; ptr != NULL; ptr = ptr->next) 
+    {
+        if (ptr->exptime &&  ptr->exptime <= current_time) 
+        {
+            mnc_do_lru_delete(ptr);
+            return ptr;
+        }
+    }
+
+    return NULL;
+}
+
 extern mnc_item* mnc_do_fetch_lru_last(unsigned int id)
 {
     mnc_item* ret = NULL;

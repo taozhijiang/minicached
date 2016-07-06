@@ -6,7 +6,6 @@ static size_t mem_allocated = 0;  //已经使用内存
 
 slabclass_t mnc_slabclass[SLAB_SZ_TYPE]; 
 
-
 RET_T mnc_slab_init(void)
 {
     unsigned int i = 0;
@@ -58,6 +57,7 @@ static RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id);
 static RET_T mnc_do_slabs_destroy(mnc_item* it, unsigned int id);
 static RET_T mnc_do_slabs_newslab(unsigned int id);
 static RET_T mnc_do_slabs_recycle(unsigned int id, double stress);
+static RET_T mnc_do_slabs_expired(unsigned int id);
 static RET_T mnc_do_slabs_force_lru(unsigned int id);
 
 void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags) 
@@ -95,6 +95,12 @@ static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags
     /*无空闲item*/
     if (p_class->sl_curr == 0) 
     {
+
+        // 第一步：清理超时的item
+        if(mnc_do_slabs_expired(id) == RET_YES)
+            goto alloc_ok;
+
+        // 第二步：整理slabs
         if (mnc_do_slabs_newslab(id) == RET_NO)
         {
             st_d_print("TRYING RECYCLE MEMORY WITH STRESS %f !", 3.0);
@@ -130,8 +136,12 @@ static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags
         else
             goto alloc_ok;
 
+        // 第三步：寻找最后完整剩余的slab，或者LRU清除
+        // 最旧的元素
         if (mnc_do_slabs_newslab(id) == RET_NO)
         {
+            st_d_print("TRYING LRU Recall...");
+
             if(mnc_do_slabs_force_lru(id) == RET_NO)
                 return NULL;
         }
@@ -392,6 +402,20 @@ static RET_T mnc_do_slabs_recycle(unsigned int id, double stress)
     return RET_YES;
 }
 
+static RET_T mnc_do_slabs_expired(unsigned int id)
+{
+    mnc_item* it_free = NULL;
+
+    it_free = mnc_do_fetch_expired(id);
+    if (!it_free)
+        return RET_NO;
+
+    mnc_hash_delete(it_free);
+    mnc_do_slabs_free(it_free, ITEM_alloc_len(it_free->nkey, it_free->ndata), id); 
+
+    return RET_YES;
+}
+
 /**
  * 最严厉的释放操作，可能释放仅有的空余slab，然后newslab
  * 或者查找相同class_id的lru，去除最不常用的item 
@@ -481,4 +505,3 @@ void mnc_class_statistic(unsigned int id)
 
     return;
 }
-
