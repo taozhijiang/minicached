@@ -7,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 #include <assert.h>
 
@@ -25,7 +26,7 @@ extern "C" {
  * 中间的一个NULL是PAD用的
  */
 typedef struct _mnc_item {
-    time_t      time;       /* least recent access */
+    time_t      time;       /* least recent access LRU访问时间 */
     time_t      exptime;    /* expire time */
 
                             /* Protected by sbclass_lock */
@@ -61,6 +62,7 @@ RET_T mnc_link_item_l(mnc_item *it);
 RET_T mnc_unlink_item_l(mnc_item *it);
 RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata);
 void mnc_remove_item(mnc_item *it);
+void mnc_update_item(mnc_item *it, bool force);
 
 #ifdef __cplusplus 
 }

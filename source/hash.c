@@ -32,7 +32,8 @@ mnc_item* hash_find(const void* key, const size_t nkey)
 
     while (head) 
     {
-        if ((nkey == head->nkey) && (memcmp(key, ITEM_key(head), nkey) == 0)) {
+        if ((nkey == head->nkey) && (memcmp(key, ITEM_key(head), nkey) == 0)) 
+        {
             it = head;
             break;
         }
@@ -42,7 +43,9 @@ mnc_item* hash_find(const void* key, const size_t nkey)
     return it;
 }
 
-/*查找到对应元素列表的前一个位置，主要是删除时候使用*/
+/** 
+ * 查找到对应元素列表的前一个位置，主要是删除时候使用 
+ * NICE function */ 
 static mnc_item** hash_find_pre(const void* key, const size_t nkey)
 {
     mnc_item **p_pos = NULL;
@@ -64,12 +67,14 @@ RET_T mnc_hash_insert(mnc_item *it)
     mnc_item* head = NULL;
     uint32_t hv = hash(ITEM_key(it), it->nkey); 
 
-    primary_hashtable[hv & hashmask(HASH_POWER)]; 
-    it->h_next = primary_hashtable[hv & hashmask(HASH_POWER)] = it;
+    it->h_next = primary_hashtable[hv & hashmask(HASH_POWER)]; 
+    primary_hashtable[hv & hashmask(HASH_POWER)] = it;
 
     it->it_flags |= ITEM_LINKED;
+    it->time = current_time;
 
     __sync_add_and_fetch(&hash_item_count, 1);
+    st_d_print("CURRENT CNT: %d", hash_item_count);
 
     return RET_YES;
 }
@@ -79,15 +84,16 @@ RET_T mnc_hash_delete(mnc_item *it)
     mnc_item **before = hash_find_pre(ITEM_key(it), it->nkey); 
     mnc_item *nxt = NULL;
 
-    if (before)
+    assert(*before);
+
+    if (*before)
     {
         nxt = (*before)->h_next;
         (*before)->h_next = 0;   /* probably pointless, but whatever. */
         *before = nxt;
 
-        nxt->it_flags &= ~ITEM_LINKED;
-
         __sync_sub_and_fetch(&hash_item_count, 1);
+        st_d_print("CURRENT CNT: %d", hash_item_count);
 
         return RET_YES;
     }

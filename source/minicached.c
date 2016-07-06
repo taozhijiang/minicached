@@ -1,5 +1,4 @@
 #include "minicached.h"
-#include "hash.h"
 #include "slabs.h"
 
 #include <signal.h>
@@ -7,6 +6,7 @@
 
 extern RET_T mnc_items_init(void);
 extern RET_T mnc_hash_init(void);
+extern RET_T mnc_lru_init(void);
 
 #define TM_SIG     SIGUSR2
 static  time_t     realtimer_id;

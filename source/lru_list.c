@@ -67,6 +67,7 @@ static RET_T mnc_do_lru_insert(mnc_item *it)
     it->next = *head;
     if (it->next) 
         it->next->prev = it;
+
     *head = it;
     if (*tail == 0) 
         *tail = it;
@@ -89,6 +90,7 @@ static RET_T mnc_do_lru_delete(mnc_item *it)
         *tail = it->prev;
     }
 
+    //双向非循环链表
     assert(it->next != it);
     assert(it->prev != it);
 

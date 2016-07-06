@@ -16,6 +16,7 @@ static inline void item_unlock(uint32_t hv) {
 
 mnc_item* mnc_do_get_item(const void* key, const size_t nkey);
 static void mnc_do_remove_item(mnc_item *it);
+static void mnc_do_update_item(mnc_item *it, bool force);
 
 RET_T mnc_items_init(void)
 {
@@ -58,9 +59,9 @@ mnc_item *mnc_new_item(const void *key, size_t nkey, time_t exptime, int nbytes)
         return NULL;
     }
 
-    memset(it, 0, ITEM_alloc_len(nkey, nbytes));
+    memset(ITEM_key(it), 0, nkey + nbytes + 1);
     it->nkey = nkey;
-    it->ndata = nbytes;
+    it->ndata = 0;
     memcpy(ITEM_key(it), key, nkey);
     if (exptime)
     {
@@ -109,6 +110,8 @@ RET_T mnc_unlink_item_l(mnc_item *it)
     uint32_t hv = hash(ITEM_key(it), it->nkey);
 
     item_lock(hv);
+    it->it_flags &= ~ITEM_LINKED;
+
     ret = mnc_hash_delete(it);
     mnc_lru_delete(it);
     item_unlock(hv);
@@ -137,7 +140,7 @@ RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata)
     item_lock(hv);
     old_it = mnc_do_get_item(ITEM_key(p_it), p_it->nkey);   //检查是否已经加入链表
 
-    if (p_it->ndata >= ndata) 
+    if (mnc_item_slab_size(p_it) >= ndata) 
     {
         memcpy(ITEM_dat(p_it), dat, ndata);
         p_it->ndata = ndata;
@@ -146,7 +149,11 @@ RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata)
             mnc_hash_insert(p_it);
             mnc_lru_insert(p_it);
         }
-        assert(p_it == old_it);
+        else
+        {
+            mnc_do_update_item(p_it, true);
+            assert(p_it == old_it);
+        }
         item_unlock(hv);
         return RET_YES;
     }
@@ -162,7 +169,7 @@ RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata)
         return RET_NO;
     }
 
-    if(!old_it)
+    if(old_it)
     {
         assert(p_it == old_it);
         mnc_hash_delete(p_it); 
@@ -193,6 +200,19 @@ void mnc_remove_item(mnc_item *it)
     return;
 }
 
+/**
+ * 更新LRU列表和元素的访问时间
+ */
+void mnc_update_item(mnc_item *it, bool force)
+{
+    uint32_t hv = hash(ITEM_key(it), it->nkey);
+
+    item_lock(hv);
+    mnc_do_update_item(it, force);
+    item_unlock(hv);
+
+    return;
+}
 
 
 /**
@@ -203,13 +223,11 @@ void mnc_remove_item(mnc_item *it)
 mnc_item* mnc_do_get_item(const void* key, const size_t nkey)
 {   
     mnc_item* ret_i = NULL;
-    uint32_t hv = hash(key, nkey);
 
     ret_i = hash_find(key, nkey);
 
     if (ret_i && ret_i->exptime &&  ret_i->exptime <= current_time) 
     {
-        st_d_print("[%lx]expired", hv);
         mnc_hash_delete(ret_i);
         mnc_lru_delete(ret_i);
         mnc_do_remove_item(ret_i);
@@ -228,6 +246,23 @@ static void mnc_do_remove_item(mnc_item *it)
         
         mnc_slabs_free(it, 
                    ITEM_alloc_len(it->nkey, it->ndata), it->slabs_clsid);
+    }
+
+    return;
+}
+
+// 更新item->time的LRU访问时间
+// work as touch
+static void mnc_do_update_item(mnc_item *it, bool force)
+{
+    if ((it->time > current_time - ITEM_UPDATE_INTERVAL) && !force) 
+        return;
+
+    if (it->it_flags & ITEM_LINKED)
+    {
+        mnc_lru_delete(it);
+        it->time = current_time;
+        mnc_lru_insert(it);
     }
 
     return;

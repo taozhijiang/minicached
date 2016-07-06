@@ -44,6 +44,13 @@ int mnc_slabs_clsid(const size_t size)
     return -1;
 }
 
+unsigned int mnc_item_slab_size(const mnc_item* it) 
+{
+    assert(it->slabs_clsid < SLAB_SZ_TYPE);
+
+    return mnc_slabclass[it->slabs_clsid].size;
+}
+
 static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags);
 static RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id);
 static RET_T mnc_do_slabs_newslab(unsigned int id);
@@ -94,6 +101,7 @@ static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags
     /* Kill flag and initialize refcount here for lock safety in slab
      * mover's freeness detection. */
     it->it_flags &= ~ITEM_SLABBED;
+    it->slabs_clsid = id;
     p_class->sl_curr --;
 
     p_class->requested -= size;
@@ -111,7 +119,7 @@ static RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id)
 
     it = (mnc_item *)ptr;
     it->it_flags = ITEM_SLABBED;
-    it->slabs_clsid = 0;    //将会在item中初始化
+    it->slabs_clsid = 0;    //将会在申请的时候重新初始化
 
     // 添加到链表的头部
     it->prev = 0;
@@ -154,21 +162,21 @@ static RET_T mnc_do_slabs_newslab(unsigned int id)
         else
             new_list_size = p_class->slab_list_size * 2;
 
-        st_d_print("relarge the slab_list to: %d", new_list_size);
-
        // The contents will  be  unchanged
        // in  the range from the start of the 
        // region up to the minimum of the old and new sizes.
         void *new_list = realloc(p_class->slab_list, new_list_size * sizeof(void *));
         if (!new_list)
         {
-            st_d_error("relarge the slab_list failed: %d", new_list_size);
+            st_d_error("relarge the slab_list failed: %d, class_id: %d", 
+                       new_list_size, id);
             free(new_block);
             return RET_NO;
         }
         else
         {
-            st_d_print("relarge the slab_list ok: %d", new_list_size);
+            st_d_print("relarge the slab_list ok: %d, class_id:%d", 
+                       new_list_size, id);
             p_class->slab_list = new_list;
             p_class->slab_list_size = new_list_size;
         }
