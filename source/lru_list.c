@@ -102,10 +102,15 @@ static RET_T mnc_do_lru_delete(mnc_item *it)
     return RET_YES;
 }
 
-extern mnc_item* mnc_do_lru_last(unsigned int id)
+extern mnc_item* mnc_do_fetch_lru_last(unsigned int id)
 {
-    if (lru_tails[id])
-        return lru_tails[id];
+    mnc_item* ret = NULL;
 
-    return NULL;
+    if (lru_tails[id])
+    {
+        ret = lru_tails[id];
+        mnc_do_lru_delete(ret);
+    }
+
+    return ret;
 }

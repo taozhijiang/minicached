@@ -143,7 +143,10 @@ RET_T mnc_outof_memory_test(void)
     {
         it = mnc_get_item_l(&key, sizeof(int));
         if (!it)
-            break;
+        {
+            ++key;
+            continue;
+        }
 
         mnc_class_statistic(it->slabs_clsid); 
         mnc_unlink_item_l(it); 
@@ -153,6 +156,8 @@ RET_T mnc_outof_memory_test(void)
 
         ++key;
     }
+
+    st_d_print("%s PASS!", __FUNCTION__);
 
     return RET_YES;
 }
@@ -184,7 +189,10 @@ RET_T mnc_recycle_memory_test(void)
     {
         it = mnc_get_item_l(&key, sizeof(int));
         if (!it)
-            break;
+        {
+            ++key;
+            continue;
+        }
 
         mnc_class_statistic(it->slabs_clsid); 
         mnc_unlink_item_l(it); 
@@ -194,6 +202,8 @@ RET_T mnc_recycle_memory_test(void)
 
         ++key;
     }
+
+    st_d_print("%s PASS!", __FUNCTION__);
 
     return RET_YES;
 }

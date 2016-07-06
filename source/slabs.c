@@ -453,13 +453,12 @@ static RET_T mnc_do_slabs_force_lru(unsigned int id)
     if (p_class->slabs == 0)
         return RET_NO;
     
-    it_free = mnc_do_lru_last(id);
+    it_free = mnc_do_fetch_lru_last(id);
     if (!it_free)
         return RET_NO;
 
     mnc_hash_delete(it_free);
-    mnc_lru_delete(it_free);
-
+    mnc_do_slabs_free(it_free, ITEM_alloc_len(it_free->nkey, it_free->ndata), id); 
     return RET_YES;
 }
 

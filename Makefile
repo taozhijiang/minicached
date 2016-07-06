@@ -1,6 +1,6 @@
 DEBUG ?= 1
 CC = gcc
-CCFLAGS = -g -O2 -std=gnu99 
+CCFLAGS = -g -std=gnu99 
 CPPFLAGS = 
 CXX = g++
 CXXFLAGS = $(CCFLAGS)
