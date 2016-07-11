@@ -1,3 +1,5 @@
+#include "gtest/gtest.h"
+
 #include "minicached.h"
 #include "hash_lru.h"
 
@@ -6,6 +8,12 @@ RET_T mnc_item_test_char_key(void);
 RET_T mnc_item_test_lru_touch(void);
 RET_T mnc_outof_memory_test(void);
 RET_T mnc_recycle_memory_test(void);
+
+
+TEST(mnc_item_test_int_key, int_key) 
+{
+    EXPECT_EQ(RET_YES, mnc_item_test_int_key());
+}
 
 RET_T mnc_item_test_int_key(void)
 {
@@ -29,12 +37,14 @@ RET_T mnc_item_test_int_key(void)
     assert(!mnc_get_item_l(&i_key, key_len));
     st_d_print("good, expired item can not be got!");
 
-    st_d_print("%s PASS!", __FUNCTION__);
-
     return RET_YES;
 }
 
 
+TEST(mnc_item_test_char_key, char_key) 
+{
+    EXPECT_EQ(RET_YES, mnc_item_test_char_key());
+}
 
 RET_T mnc_item_test_char_key(void)
 {
@@ -80,11 +90,13 @@ RET_T mnc_item_test_char_key(void)
     mnc_remove_item(g_it);
     assert(!mnc_get_item_l(key, key_len));
 
-    st_d_print("%s PASS!", __FUNCTION__);
-
     return RET_YES;
 }
 
+TEST(mnc_item_test_lru_touch, lru_touch_time) 
+{
+    EXPECT_EQ(RET_YES, mnc_item_test_lru_touch());
+}
 
 RET_T mnc_item_test_lru_touch(void)
 {
@@ -109,12 +121,14 @@ RET_T mnc_item_test_lru_touch(void)
 
     mnc_unlink_item_l(it);
     mnc_remove_item(it);
-    
-    st_d_print("%s PASS!", __FUNCTION__);
 
     return RET_YES;
 }
 
+TEST(mnc_outof_memory_test, try_all_avail_memory) 
+{
+    EXPECT_EQ(RET_YES, mnc_outof_memory_test());
+}
 
 RET_T mnc_outof_memory_test(void)
 {
@@ -157,9 +171,12 @@ RET_T mnc_outof_memory_test(void)
         ++key;
     }
 
-    st_d_print("%s PASS!", __FUNCTION__);
-
     return RET_YES;
+}
+
+TEST(mnc_recycle_memory_test, recycle_memory_from_free) 
+{
+    EXPECT_EQ(RET_YES, mnc_recycle_memory_test());
 }
 
 // JUST RUN AFTER mnc_outof_memory_test above
@@ -203,7 +220,6 @@ RET_T mnc_recycle_memory_test(void)
         ++key;
     }
 
-    st_d_print("%s PASS!", __FUNCTION__);
-
     return RET_YES;
 }
+

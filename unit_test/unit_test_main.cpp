@@ -1,11 +1,9 @@
 #include <stdio.h>
 #include "minicached.h"
-
-#include <signal.h>
-
 #include <json-c/json.h>
 #include <json-c/json_tokener.h>
 
+#include "gtest/gtest.h"
 extern size_t mem_limit;
 
 static RET_T load_settings(void)
@@ -25,35 +23,21 @@ static RET_T load_settings(void)
             mem_limit = 64 * 1024 * 1024; //default 64M
     }
 
-
     // dump settings
     st_d_print("TOTAL MEMORY: %lu", mem_limit);
 
     return RET_YES;
 }
 
-
-int main(int argc, char* argv[])
+GTEST_API_ int main(int argc, char **argv) 
 {
-#if 1
-    // For debug with segment fault
-    struct sigaction sa;
-    sa.sa_handler = backtrace_info;
-    sigaction(SIGSEGV, &sa, NULL);
 
-    // ignore SIGPIPE
-    signal(SIGPIPE, SIG_IGN);
-    signal(SIGCHLD, SIG_IGN);
-    signal(SIGABRT, SIG_IGN);
-
-#endif
-
+    /* Init here!*/
     load_settings();
     mnc_init();
 
-    while (1)
-    {
-        sleep(3);
-    }
-    return 0;
+    fprintf(stderr, "Running main() from gtest_main.cc\n");
+
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }
