@@ -30,10 +30,13 @@ typedef struct {
                             // 当前class类别已经被缓存的对象占用的字节数目，
                             // 实际负载的字节数目
 
-    pthread_mutex_t sbclass_lock; 
+    // 保护每个class的LRU队列
+    pthread_mutex_t lru_lock; 
 
 } slabclass_t;
 
+//分配、释放slab操作时候的大锁
+extern pthread_mutex_t slab_lock;
 
 
 RET_T mnc_slab_init(void);

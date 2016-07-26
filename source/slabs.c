@@ -4,6 +4,8 @@
 size_t mem_limit = 0;     //最大内存限制
 static size_t mem_allocated = 0;  //已经使用内存
 
+//分配、释放slab操作时候的大锁
+pthread_mutex_t slab_lock;
 slabclass_t mnc_slabclass[SLAB_SZ_TYPE]; 
 
 RET_T mnc_slab_init(void)
@@ -19,11 +21,13 @@ RET_T mnc_slab_init(void)
         st_d_print("slab class %3d: chunk size %9u perslab %7u",
                 i, mnc_slabclass[i].size, mnc_slabclass[i].perslab);
 
-        pthread_mutex_init(&mnc_slabclass[i].sbclass_lock, NULL);
+        pthread_mutex_init(&mnc_slabclass[i].lru_lock, NULL);
         curr_size = curr_size << 1;
     }
 
     mem_allocated = 0;
+
+    pthread_mutex_init(&slab_lock, NULL);
 
     return RET_YES;
 }
@@ -64,9 +68,9 @@ void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags)
 {
     void *ret;
 
-    pthread_mutex_lock(&mnc_slabclass[id].sbclass_lock); 
+    pthread_mutex_lock(&slab_lock); 
     ret = mnc_do_slabs_alloc(size, id, flags);
-    pthread_mutex_unlock(&mnc_slabclass[id].sbclass_lock);
+    pthread_mutex_unlock(&slab_lock);
 
     return ret;
 }
@@ -75,9 +79,9 @@ RET_T mnc_slabs_free(void *ptr, size_t size, unsigned int id)
 {
     RET_T ret;
 
-    pthread_mutex_lock(&mnc_slabclass[id].sbclass_lock);
+    pthread_mutex_lock(&slab_lock);
     ret = mnc_do_slabs_free(ptr, size, id);
-    pthread_mutex_unlock(&mnc_slabclass[id].sbclass_lock);
+    pthread_mutex_unlock(&slab_lock);
 
     return ret;
 }
@@ -95,7 +99,6 @@ static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags
     /*无空闲item*/
     if (p_class->sl_curr == 0) 
     {
-
         // 第一步：清理超时的item
         if(mnc_do_slabs_expired(id) == RET_YES)
             goto alloc_ok;
@@ -109,9 +112,9 @@ static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags
             {
                 if (i != id)
                 {
-                    pthread_mutex_lock(&mnc_slabclass[i].sbclass_lock);
+                    pthread_mutex_lock(&mnc_slabclass[i].lru_lock);
                     mnc_do_slabs_recycle(i, 3.0);
-                    pthread_mutex_unlock(&mnc_slabclass[i].sbclass_lock);
+                    pthread_mutex_unlock(&mnc_slabclass[i].lru_lock);
                 }
             }
         }
@@ -127,9 +130,9 @@ static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags
             {
                 if (i != id)
                 {
-                    pthread_mutex_lock(&mnc_slabclass[i].sbclass_lock);
+                    pthread_mutex_lock(&mnc_slabclass[i].lru_lock);
                     mnc_do_slabs_recycle(i, 1.2);
-                    pthread_mutex_unlock(&mnc_slabclass[i].sbclass_lock);
+                    pthread_mutex_unlock(&mnc_slabclass[i].lru_lock);
                 }
             }
         }
@@ -437,7 +440,7 @@ static RET_T mnc_do_slabs_force_lru(unsigned int id)
     {
         if (i != id)
         {
-            pthread_mutex_lock(&mnc_slabclass[i].sbclass_lock);
+            pthread_mutex_lock(&mnc_slabclass[i].lru_lock);
             if (&mnc_slabclass[i].sl_curr == &mnc_slabclass[i].perslab) 
             {
                 get_slab = true;
@@ -464,7 +467,7 @@ static RET_T mnc_do_slabs_force_lru(unsigned int id)
                 break;
             }
 
-            pthread_mutex_unlock(&mnc_slabclass[i].sbclass_lock);
+            pthread_mutex_unlock(&mnc_slabclass[i].lru_lock);
         }
     }
 

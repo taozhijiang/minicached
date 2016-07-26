@@ -1,7 +1,9 @@
 #ifndef __ST_OTHERS_H
 #define __ST_OTHERS_H
 
+#ifndef DEBUG
 #define DEBUG
+#endif
 
 #ifdef __cplusplus 
 extern "C" {

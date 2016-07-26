@@ -27,9 +27,9 @@ RET_T mnc_lru_insert(mnc_item *it)
 
     assert(id < SLAB_SZ_TYPE);
 
-    pthread_mutex_lock(&mnc_slabclass[id].sbclass_lock);
+    pthread_mutex_lock(&mnc_slabclass[id].lru_lock);
     ret = mnc_do_lru_insert(it);
-    pthread_mutex_unlock(&mnc_slabclass[id].sbclass_lock);
+    pthread_mutex_unlock(&mnc_slabclass[id].lru_lock);
 
     return ret;
 }
@@ -42,9 +42,9 @@ RET_T mnc_lru_delete(mnc_item *it)
 
     assert(id < SLAB_SZ_TYPE);
 
-    pthread_mutex_lock(&mnc_slabclass[id].sbclass_lock);
+    pthread_mutex_lock(&mnc_slabclass[id].lru_lock);
     ret = mnc_do_lru_delete(it);
-    pthread_mutex_unlock(&mnc_slabclass[id].sbclass_lock);
+    pthread_mutex_unlock(&mnc_slabclass[id].lru_lock);
 
     return ret;
 }
