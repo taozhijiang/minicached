@@ -100,31 +100,58 @@ static RET_T mnc_do_lru_delete(mnc_item *it)
     return RET_YES;
 }
 
-extern mnc_item* mnc_do_fetch_expired(unsigned int id)
+extern RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id);
+extern void mnc_lru_expired(unsigned int id)
 {
     mnc_item *ptr = lru_heads[id];
+    unsigned int free_cnt = 0;
 
+    pthread_mutex_lock(&mnc_slabclass[id].lru_lock);
     for (; ptr != NULL; ptr = ptr->next) 
     {
         if (ptr->exptime &&  ptr->exptime <= mnc_status.current_time) 
         {
-            mnc_do_lru_delete(ptr);
-            return ptr;
+            uint32_t hv = hash(ITEM_key(ptr), ptr->nkey); 
+            if (!item_trylock(hv)) 
+            {
+                mnc_do_hash_delete(ptr);
+                mnc_do_lru_delete(ptr);
+                mnc_do_slabs_free(ptr, ITEM_alloc_len(ptr->nkey, ptr->ndata), id); 
+
+                ++ free_cnt;
+                item_tryunlock(hv);
+            }
         }
     }
+    pthread_mutex_unlock(&mnc_slabclass[id].lru_lock);
 
-    return NULL;
+    if (free_cnt)
+        st_d_print("FREE CNT: %u", free_cnt);
+
+    return;
 }
 
-extern mnc_item* mnc_do_fetch_lru_last(unsigned int id)
+extern void mnc_lru_trim(unsigned int id)
 {
-    mnc_item* ret = NULL;
+    mnc_item *ptr = lru_tails[id];
 
-    if (lru_tails[id])
+    pthread_mutex_lock(&mnc_slabclass[id].lru_lock);
+    for (; ptr != NULL; ptr = ptr->next) 
     {
-        ret = lru_tails[id];
-        mnc_do_lru_delete(ret);
-    }
+        uint32_t hv = hash(ITEM_key(ptr), ptr->nkey); 
+        if (!item_trylock(hv)) 
+        {
+            mnc_do_hash_delete(ptr);
+            mnc_do_lru_delete(ptr);
+            mnc_do_slabs_free(ptr, ITEM_alloc_len(ptr->nkey, ptr->ndata), id); 
 
-    return ret;
+            item_tryunlock(hv);
+
+            // harmful, not expect to free too much!
+            break;
+        }
+    }
+    pthread_mutex_unlock(&mnc_slabclass[id].lru_lock);
+
+    return;
 }

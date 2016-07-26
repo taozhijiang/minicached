@@ -113,7 +113,6 @@ void mnc_unlink_item_l(mnc_item *it)
     uint32_t hv = hash(ITEM_key(it), it->nkey);
 
     item_lock(hv);
-    it->it_flags &= ~ITEM_LINKED;
 
     mnc_do_hash_delete(it);
     mnc_lru_delete(it);

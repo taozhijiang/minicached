@@ -57,13 +57,21 @@ unsigned int mnc_item_slab_size(const mnc_item* it)
 static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags);
 static RET_T mnc_do_slabs_move(mnc_item* it_src, mnc_item* it_des, 
                                unsigned int id);
-static RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id);
+extern RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id);
 static RET_T mnc_do_slabs_destroy(mnc_item* it, unsigned int id);
 static RET_T mnc_do_slabs_newslab(unsigned int id);
 static RET_T mnc_do_slabs_recycle(unsigned int id, double stress);
-static RET_T mnc_do_slabs_expired(unsigned int id);
-static RET_T mnc_do_slabs_force_lru(unsigned int id);
 
+
+extern void mnc_lru_expired(unsigned int id);
+extern void mnc_lru_trim(unsigned int id);
+
+/**
+ * 将slabs的回收等任务从slabs_alloc中剥离出来，这样的好处是可以 
+ * 降低对slab_lock这个大锁的hold持有时间 
+ *  
+ * 该函数调用时候可能持有 hash锁
+ */
 void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags) 
 {
     void *ret;
@@ -71,7 +79,38 @@ void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags)
     pthread_mutex_lock(&slab_lock); 
     ret = mnc_do_slabs_alloc(size, id, flags);
     pthread_mutex_unlock(&slab_lock);
+    if (ret)
+        return ret;
 
+    st_d_print("回收超时slabs");
+    mnc_lru_expired(id);
+    pthread_mutex_lock(&slab_lock); 
+    ret = mnc_do_slabs_alloc(size, id, flags);
+    pthread_mutex_unlock(&slab_lock);
+    if (ret)
+        return ret;
+
+    pthread_mutex_lock(&slab_lock); 
+    st_d_print("申请新的内存块");
+    mnc_do_slabs_newslab(id);   //需要slab_class保护
+    ret = mnc_do_slabs_alloc(size, id, flags);
+    pthread_mutex_unlock(&slab_lock);
+    if (ret)
+        return ret;
+
+    st_d_print("Rebalance内存对象");
+    //mnc_slabs_new_rebalance(id);
+    pthread_mutex_lock(&slab_lock); 
+    ret = mnc_do_slabs_alloc(size, id, flags);
+    pthread_mutex_unlock(&slab_lock);
+    if (ret)
+        return ret;
+
+    st_d_print("LRU淘汰");
+    mnc_lru_trim(id);
+    pthread_mutex_lock(&slab_lock); 
+    ret = mnc_do_slabs_alloc(size, id, flags);
+    pthread_mutex_unlock(&slab_lock);
     return ret;
 }
 
@@ -88,7 +127,14 @@ RET_T mnc_slabs_free(void *ptr, size_t size, unsigned int id)
 
 
 // Internal API without lock
-
+// 由于涉及到对象的回收，小心死锁!!!
+// 这个函数可能被store_item等函数重新分配使用，是hold hash锁的，此处
+// 注意死锁
+// 线程1:  A  B  ->  B A
+// 线程2:  A tryB -> tryB A 感觉不会死锁的吧
+// 
+// slab_lock    held
+// hv           may held
 static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags) 
 {
     assert(id < SLAB_SZ_TYPE);
@@ -96,63 +142,8 @@ static void *mnc_do_slabs_alloc(size_t size, unsigned int id, unsigned int flags
     mnc_item    *it;
     unsigned int i = 0;
 
-    /*无空闲item*/
-    if (p_class->sl_curr == 0) 
-    {
-        // 第一步：清理超时的item
-        if(mnc_do_slabs_expired(id) == RET_YES)
-            goto alloc_ok;
-
-        // 第二步：整理slabs
-        if (mnc_do_slabs_newslab(id) == RET_NO)
-        {
-            st_d_print("TRYING RECYCLE MEMORY WITH STRESS %f !", 3.0);
-
-            for (i=0; i<SLAB_SZ_TYPE; ++i)
-            {
-                if (i != id)
-                {
-                    pthread_mutex_lock(&mnc_slabclass[i].lru_lock);
-                    mnc_do_slabs_recycle(i, 3.0);
-                    pthread_mutex_unlock(&mnc_slabclass[i].lru_lock);
-                }
-            }
-        }
-        else
-            goto alloc_ok;
-
-        // TRY AGAIN
-        if (mnc_do_slabs_newslab(id) == RET_NO)
-        {
-            st_d_print("TRYING RECYCLE MEMORY WITH STRESS %f !", 1.2);
-
-            for (i=0; i<SLAB_SZ_TYPE; ++i)
-            {
-                if (i != id)
-                {
-                    pthread_mutex_lock(&mnc_slabclass[i].lru_lock);
-                    mnc_do_slabs_recycle(i, 1.2);
-                    pthread_mutex_unlock(&mnc_slabclass[i].lru_lock);
-                }
-            }
-        }
-        else
-            goto alloc_ok;
-
-        // 第三步：寻找最后完整剩余的slab，或者LRU清除
-        // 最旧的元素
-        if (mnc_do_slabs_newslab(id) == RET_NO)
-        {
-            st_d_print("TRYING LRU Recall...");
-
-            if(mnc_do_slabs_force_lru(id) == RET_NO)
-                return NULL;
-        }
-    }
-
-alloc_ok:
-
-    assert(p_class->sl_curr);
+    if(p_class->sl_curr == 0)
+        return NULL;
 
     it = (mnc_item *)p_class->slots;
     p_class->slots = it->next;
@@ -169,7 +160,7 @@ alloc_ok:
 }
 
 // 并非释放内存，而是进行初始化操作，变为缓存可用的item对象
-static RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id)
+extern RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id)
 {
     slabclass_t *p_class;
     mnc_item    *it;
@@ -405,104 +396,20 @@ static RET_T mnc_do_slabs_recycle(unsigned int id, double stress)
     return RET_YES;
 }
 
-static RET_T mnc_do_slabs_expired(unsigned int id)
-{
-    mnc_item* it_free = NULL;
-
-    it_free = mnc_do_fetch_expired(id);
-    if (!it_free)
-        return RET_NO;
-
-    mnc_do_hash_delete(it_free);
-    mnc_do_slabs_free(it_free, ITEM_alloc_len(it_free->nkey, it_free->ndata), id); 
-
-    return RET_YES;
-}
-
-/**
- * 最严厉的释放操作，可能释放仅有的空余slab，然后newslab
- * 或者查找相同class_id的lru，去除最不常用的item 
- *  
- * 不行，就返回空 
- */
-static RET_T mnc_do_slabs_force_lru(unsigned int id)
-{
-    slabclass_t *p_class = &mnc_slabclass[id];
-    unsigned int i = 0;
-    unsigned int j = 0;
-
-    slabclass_t *p_class_free = NULL;
-    mnc_item* it_free = NULL;
-
-    // STAGE-1 查看是否有完全空余slab
-    bool get_slab = false;
-    for (i=0; i<SLAB_SZ_TYPE; ++i)
-    {
-        if (i != id)
-        {
-            pthread_mutex_lock(&mnc_slabclass[i].lru_lock);
-            if (&mnc_slabclass[i].sl_curr == &mnc_slabclass[i].perslab) 
-            {
-                get_slab = true;
-                p_class_free = &mnc_slabclass[i];
-                assert(p_class_free->slabs == 1);
-                st_d_print("FREE THE ONLY SLAB for class_id=%d", i);
-
-                for (j=0; j<p_class_free->perslab; ++j) // free last block
-                {
-                    it_free = (mnc_item *)((char *)p_class_free->slab_list[0] + 
-                                           j * p_class_free->size); 
-                    assert( it_free->it_flags & ITEM_SLABBED );
-                    mnc_do_slabs_destroy(it_free, i);
-                }
-
-                st_d_print("GOOD, Free Block Page: %p", p_class_free->slab_list[0]); 
-                free(p_class_free->slab_list[0]);
-                -- p_class_free->slabs;
-                mem_allocated -= p_class_free->size * p_class_free->perslab;
-
-                st_d_print("total memory: %lu, already used memory:%lu", mem_limit, mem_allocated); 
-
-                //because of the harmful, break AAP
-                break;
-            }
-
-            pthread_mutex_unlock(&mnc_slabclass[i].lru_lock);
-        }
-    }
-
-    if (get_slab)
-    {
-        return mnc_do_slabs_newslab(id);
-    }
-
-    // STAGE-II free lru
-    if (p_class->slabs == 0)
-        return RET_NO;
-    
-    it_free = mnc_do_fetch_lru_last(id);
-    if (!it_free)
-        return RET_NO;
-
-    mnc_do_hash_delete(it_free);
-    mnc_do_slabs_free(it_free, ITEM_alloc_len(it_free->nkey, it_free->ndata), id); 
-    return RET_YES;
-}
-
 
 void mnc_class_statistic(unsigned int id)
 {
     slabclass_t* p_class = &mnc_slabclass[id];
 
     st_d_print("=========================================");
-    st_d_print("class_id: %lu", id);
+    st_d_print("class_id: %u", id);
     st_d_print("item size: %x", p_class->size);
-    st_d_print("perslab count: %lu", p_class->perslab); 
-    st_d_print("free count: %lu", p_class->sl_curr); 
-    st_d_print("alloc slab count: %lu", p_class->slabs); 
-    st_d_print("slab list ptr count: %lu", p_class->slab_list_size); 
+    st_d_print("perslab count: %u", p_class->perslab); 
+    st_d_print("free count: %u", p_class->sl_curr); 
+    st_d_print("alloc slab count: %u", p_class->slabs); 
+    st_d_print("slab list ptr count: %u", p_class->slab_list_size); 
     st_d_print("requested bytes: %lu", p_class->requested);
-    st_d_print("total memory: %lu, already used memory:%lu", mem_limit, mem_allocated); 
+    st_d_print("total memory: %luKB, already used memory:%luKB", mem_limit/1024, mem_allocated/1024); 
     st_d_print("");
     st_d_print("total request count: %lu", mnc_status.request_cnt);
     st_d_print("total hit count: %lu", mnc_status.hit_cnt);

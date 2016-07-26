@@ -21,6 +21,8 @@ extern "C" {
 extern pthread_mutex_t slab_lock;
 
 // sizes包含item的头部，所以不是实际的负载大小
+// 每次申请，都是1M的内存作为单位，所以这里也就限制了
+// 这个系统的缓存尺寸 64-1M，且包头部
 enum mnc_slab_sz_index  {
     SZ_64 = 0, SZ_128, SZ_256, SZ_512, 
     SZ_1K, SZ_2K, SZ_4K, SZ_8K, SZ_16K, SZ_32K, SZ_64K, 

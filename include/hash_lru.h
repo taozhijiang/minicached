@@ -30,12 +30,22 @@ extern hash_func hash;
 
 
 extern pthread_mutex_t *mnc_item_locks;
-static inline void item_lock(uint32_t hv) {
-    pthread_mutex_lock(&mnc_item_locks[hv & hashmask(HASH_POWER)]);
+
+// return 0 on success, trylock should check 
+static inline int item_lock(uint32_t hv) {
+    return pthread_mutex_lock(&mnc_item_locks[hv & hashmask(HASH_POWER)]);
 }
 
-static inline void item_unlock(uint32_t hv) {
-    pthread_mutex_unlock(&mnc_item_locks[hv & hashmask(HASH_POWER)]);
+static inline int item_unlock(uint32_t hv) {
+    return pthread_mutex_unlock(&mnc_item_locks[hv & hashmask(HASH_POWER)]);
+}
+
+static inline int item_trylock(uint32_t hv) {
+    return pthread_mutex_trylock(&mnc_item_locks[hv & hashmask(HASH_POWER)]);
+}
+
+static inline int item_tryunlock(uint32_t hv) {
+    return pthread_mutex_unlock(&mnc_item_locks[hv & hashmask(HASH_POWER)]);
 }
 
 extern RET_T mnc_hash_init(void);
@@ -49,7 +59,7 @@ RET_T mnc_do_hash_delete(mnc_item *it);
  * We only reposition items in the LRU queue if they haven't been repositioned
  * in this many seconds. That saves us from churning on frequently-accessed
  * items. 
- * 防止过于频繁的LRU更新跳动 
+ * 防止过于频繁的LRU更新
  */
 #define ITEM_UPDATE_INTERVAL 60
 
@@ -58,8 +68,9 @@ RET_T mnc_lru_init(void);
 void mnc_lru_insert(mnc_item *it);
 void mnc_lru_delete(mnc_item *it);
 
-extern mnc_item* mnc_do_fetch_expired(unsigned int id);
-extern mnc_item* mnc_do_fetch_lru_last(unsigned int id);
+// 内存回收函数
+extern void mnc_do_expired(unsigned int id);
+extern void mnc_do_lru_trim(unsigned int id);
 
 #ifdef __cplusplus 
 }
