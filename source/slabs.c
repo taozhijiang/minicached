@@ -82,7 +82,7 @@ void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags)
     if (ret)
         return ret;
 
-    st_d_print("回收超时slabs");
+    st_d_print("collect expired items");
     mnc_lru_expired(id);
     pthread_mutex_lock(&slab_lock); 
     ret = mnc_do_slabs_alloc(size, id, flags);
@@ -91,14 +91,14 @@ void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags)
         return ret;
 
     pthread_mutex_lock(&slab_lock); 
-    st_d_print("申请新的内存块");
+    st_d_print("alloc newslab");
     mnc_do_slabs_newslab(id);   //需要slab_class保护
     ret = mnc_do_slabs_alloc(size, id, flags);
     pthread_mutex_unlock(&slab_lock);
     if (ret)
         return ret;
 
-    st_d_print("Rebalance内存对象");
+    st_d_print("rebalance slab_class");
     //mnc_slabs_new_rebalance(id);
     pthread_mutex_lock(&slab_lock); 
     ret = mnc_do_slabs_alloc(size, id, flags);
@@ -106,7 +106,7 @@ void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags)
     if (ret)
         return ret;
 
-    st_d_print("LRU淘汰");
+    st_d_print("lru trim schema");
     mnc_lru_trim(id);
     pthread_mutex_lock(&slab_lock); 
     ret = mnc_do_slabs_alloc(size, id, flags);
@@ -273,6 +273,9 @@ static RET_T mnc_do_slabs_newslab(unsigned int id)
         else
             new_list_size = p_class->slab_list_size * 2;
 
+        if (new_list_size < 4)
+            new_list_size = 8;
+
        // The contents will  be  unchanged
        // in  the range from the start of the 
        // region up to the minimum of the old and new sizes.
@@ -406,9 +409,9 @@ void mnc_class_statistic(unsigned int id)
     st_d_print("item size: %x", p_class->size);
     st_d_print("perslab count: %u", p_class->perslab); 
     st_d_print("free count: %u", p_class->sl_curr); 
-    st_d_print("alloc slab count: %u", p_class->slabs); 
+    st_d_print("alloc slabs count: %u", p_class->slabs); 
     st_d_print("slab list ptr count: %u", p_class->slab_list_size); 
-    st_d_print("requested bytes: %lu", p_class->requested);
+    st_d_print("requested bytes: %luKB", p_class->requested/1024);
     st_d_print("total memory: %luKB, already used memory:%luKB", mem_limit/1024, mem_allocated/1024); 
     st_d_print("");
     st_d_print("total request count: %lu", mnc_status.request_cnt);

@@ -103,11 +103,19 @@ static RET_T mnc_do_lru_delete(mnc_item *it)
 extern RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id);
 extern void mnc_lru_expired(unsigned int id)
 {
+    pthread_mutex_lock(&mnc_slabclass[id].lru_lock);
+
     mnc_item *ptr = lru_heads[id];
+    mnc_item *nxt = NULL;
     unsigned int free_cnt = 0;
 
-    pthread_mutex_lock(&mnc_slabclass[id].lru_lock);
-    for (; ptr != NULL; ptr = ptr->next) 
+    if (!ptr)
+    {
+        pthread_mutex_unlock(&mnc_slabclass[id].lru_lock);
+        return; 
+    }
+
+    for (nxt=ptr->next; ptr&&({ nxt=ptr->next; 1; }); ptr=nxt) 
     {
         if (ptr->exptime &&  ptr->exptime <= mnc_status.current_time) 
         {
@@ -116,7 +124,7 @@ extern void mnc_lru_expired(unsigned int id)
             {
                 mnc_do_hash_delete(ptr);
                 mnc_do_lru_delete(ptr);
-                mnc_do_slabs_free(ptr, ITEM_alloc_len(ptr->nkey, ptr->ndata), id); 
+                mnc_slabs_free(ptr, ITEM_alloc_len(ptr->nkey, ptr->ndata), id); 
 
                 ++ free_cnt;
                 item_tryunlock(hv);
@@ -133,17 +141,24 @@ extern void mnc_lru_expired(unsigned int id)
 
 extern void mnc_lru_trim(unsigned int id)
 {
-    mnc_item *ptr = lru_tails[id];
-
     pthread_mutex_lock(&mnc_slabclass[id].lru_lock);
-    for (; ptr != NULL; ptr = ptr->next) 
+    mnc_item *ptr = lru_tails[id];
+    mnc_item *pre = NULL;
+
+    if (!ptr)
+    {
+        pthread_mutex_unlock(&mnc_slabclass[id].lru_lock);
+        return; 
+    }
+
+    for (pre=ptr->next; ptr&&({ pre=ptr->prev; 1; }); ptr=pre) 
     {
         uint32_t hv = hash(ITEM_key(ptr), ptr->nkey); 
         if (!item_trylock(hv)) 
         {
             mnc_do_hash_delete(ptr);
             mnc_do_lru_delete(ptr);
-            mnc_do_slabs_free(ptr, ITEM_alloc_len(ptr->nkey, ptr->ndata), id); 
+            mnc_slabs_free(ptr, ITEM_alloc_len(ptr->nkey, ptr->ndata), id); 
 
             item_tryunlock(hv);
 
@@ -151,6 +166,7 @@ extern void mnc_lru_trim(unsigned int id)
             break;
         }
     }
+
     pthread_mutex_unlock(&mnc_slabclass[id].lru_lock);
 
     return;

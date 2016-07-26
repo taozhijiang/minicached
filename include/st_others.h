@@ -129,6 +129,15 @@ static inline void backtrace_info(int param)
     }while(0)
 
 
+ // sleep can be interrupted by singal
+
+static inline void mnc_sleep(unsigned int sec)
+{
+    while (sec = sleep(sec))
+        /**/;
+}
+
+
 #ifdef __cplusplus 
 }
 #endif //__cplusplus 
