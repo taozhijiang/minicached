@@ -6,10 +6,6 @@
 //对应处理hash容器中链表的保护
 pthread_mutex_t *mnc_item_locks;
 
-// 总的请求次数，以及缓存命中次数
-volatile unsigned long request_cnt;
-volatile unsigned long hit_cnt;
-
 mnc_item* mnc_do_get_item(const void* key, const size_t nkey);
 static void mnc_do_remove_item(mnc_item *it);
 static void mnc_do_update_item(mnc_item *it, bool force);
@@ -38,7 +34,17 @@ RET_T mnc_items_init(void)
  * MNC_ITEM API 
  * 带_l后缀的，是可能修改hashtable/LRU列表的，使用时候需要注意 
  */
+// mnc_item *mnc_new_item(const void *key, size_t nkey, time_t exptime, int nbytes);
+// mnc_item* mnc_get_item_l(const void* key, const size_t nkey);
+// void mnc_link_item_l(mnc_item *it);
+// void mnc_unlink_item_l(mnc_item *it);
+// RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata);
+// void mnc_remove_item(mnc_item *it);
+// void mnc_update_item(mnc_item *it, bool force);
+// 
+
 // 创建新的item
+// 内部比较的复杂，设计到内存的分配、回收等操作
 mnc_item *mnc_new_item(const void *key, size_t nkey, time_t exptime, int nbytes) 
 {
     mnc_item *it;
@@ -51,7 +57,7 @@ mnc_item *mnc_new_item(const void *key, size_t nkey, time_t exptime, int nbytes)
     it = (mnc_item *)mnc_slabs_alloc(ITEM_alloc_len(nkey, nbytes), class_id, 0);
     if (!it)
     {
-        st_d_error("Malloc for item error!");
+        st_d_error("Malloc slabs item error!");
         return NULL;
     }
 
@@ -73,7 +79,6 @@ mnc_item *mnc_new_item(const void *key, size_t nkey, time_t exptime, int nbytes)
 
 // if it hasn't been marked as expired,
 // be sure item already in the hashtable and LRU list
-
 mnc_item* mnc_get_item_l(const void* key, const size_t nkey)
 {   
     mnc_item* ret_i = NULL;
@@ -91,32 +96,30 @@ mnc_item* mnc_get_item_l(const void* key, const size_t nkey)
 }
 
 
-RET_T mnc_link_item_l(mnc_item *it)
+void mnc_link_item_l(mnc_item *it)
 {
-    RET_T ret;
     uint32_t hv = hash(ITEM_key(it), it->nkey);
 
     item_lock(hv);
-    ret = mnc_hash_insert(it);
+    mnc_do_hash_insert(it);
     mnc_lru_insert(it);
     item_unlock(hv);
 
-    return ret;
+    return;
 }
 
-RET_T mnc_unlink_item_l(mnc_item *it)
+void mnc_unlink_item_l(mnc_item *it)
 {
-    RET_T ret;
     uint32_t hv = hash(ITEM_key(it), it->nkey);
 
     item_lock(hv);
     it->it_flags &= ~ITEM_LINKED;
 
-    ret = mnc_hash_delete(it);
+    mnc_do_hash_delete(it);
     mnc_lru_delete(it);
     item_unlock(hv);
 
-    return ret;
+    return;
 }
 
 // do store stuffs
@@ -146,7 +149,7 @@ RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata)
         p_it->ndata = ndata;
         if (!old_it)
         {
-            mnc_hash_insert(p_it);
+            mnc_do_hash_insert(p_it);
             mnc_lru_insert(p_it);
         }
         else
@@ -172,16 +175,16 @@ RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata)
     if(old_it)
     {
         assert(p_it == old_it);
-        mnc_hash_delete(p_it); 
+        mnc_do_hash_delete(p_it); 
         mnc_lru_delete(p_it);
     }
     mnc_do_remove_item(p_it);
 
     memcpy(ITEM_dat(new_it), dat, ndata);
 
-    mnc_hash_insert(new_it);
+    mnc_do_hash_insert(new_it);
     mnc_lru_insert(new_it);
-    (*it) = new_it;
+    (*it) = new_it; // 保存新的地址信息
 
     item_unlock(hv);
 
@@ -189,6 +192,7 @@ RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata)
 }
 
 
+// 必须是没有被删除的，而且是非LINKED的
 void mnc_remove_item(mnc_item *it)
 {
     uint32_t hv = hash(ITEM_key(it), it->nkey);
@@ -201,7 +205,9 @@ void mnc_remove_item(mnc_item *it)
 }
 
 /**
- * 更新LRU列表和元素的访问时间
+ * 更新LRU列表和元素的访问时间 
+ * force是强制更新时间，否则防止短时间内反复更新时间和操作 
+ * LRU列表，降低程序的性能 
  */
 void mnc_update_item(mnc_item *it, bool force)
 {
@@ -224,11 +230,11 @@ mnc_item* mnc_do_get_item(const void* key, const size_t nkey)
 {   
     mnc_item* ret_i = NULL;
 
-    ret_i = hash_find(key, nkey);
+    ret_i = mnc_do_hash_find(key, nkey);
 
     if (ret_i && ret_i->exptime &&  ret_i->exptime <= mnc_status.current_time) 
     {
-        mnc_hash_delete(ret_i);
+        mnc_do_hash_delete(ret_i);
         mnc_lru_delete(ret_i);
         mnc_do_remove_item(ret_i);
         ret_i = NULL;
@@ -237,10 +243,16 @@ mnc_item* mnc_do_get_item(const void* key, const size_t nkey)
     return ret_i;
 }
 
+/**
+ * 删除对象，并放回到slab缓存池中
+ */
 static void mnc_do_remove_item(mnc_item *it)
 {
     if (it)
     {
+        assert((it->it_flags & ITEM_LINKED) == 0);
+        assert((it->it_flags & ITEM_SLABBED) == 0);
+
         st_d_print("FREEING(%x)...",  
                    hash(ITEM_key(it), it->nkey));
         
@@ -258,6 +270,7 @@ static void mnc_do_update_item(mnc_item *it, bool force)
     if ((it->time > mnc_status.current_time - ITEM_UPDATE_INTERVAL) && !force) 
         return;
 
+    // 更新LRU队列顺序
     if (it->it_flags & ITEM_LINKED)
     {
         mnc_lru_delete(it);

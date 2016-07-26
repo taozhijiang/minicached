@@ -237,7 +237,7 @@ static RET_T mnc_do_slabs_move(mnc_item* it_src, mnc_item* it_des,
     assert(it_des->it_flags & ITEM_SLABBED);
 
     it_src->it_flags &= ~ITEM_LINKED;
-    mnc_hash_delete(it_src);
+    mnc_do_hash_delete(it_src);
     mnc_lru_delete(it_src);
 
     it_des->time = it_src->time;
@@ -248,7 +248,7 @@ static RET_T mnc_do_slabs_move(mnc_item* it_src, mnc_item* it_des,
     it_des->ndata = it_src->ndata;
 
     memcpy(it_des->data, it_src->data, p_class->size);
-    mnc_hash_insert(it_des);
+    mnc_do_hash_insert(it_des);
     mnc_lru_insert(it_des);
 
     return RET_YES;
@@ -413,7 +413,7 @@ static RET_T mnc_do_slabs_expired(unsigned int id)
     if (!it_free)
         return RET_NO;
 
-    mnc_hash_delete(it_free);
+    mnc_do_hash_delete(it_free);
     mnc_do_slabs_free(it_free, ITEM_alloc_len(it_free->nkey, it_free->ndata), id); 
 
     return RET_YES;
@@ -484,7 +484,7 @@ static RET_T mnc_do_slabs_force_lru(unsigned int id)
     if (!it_free)
         return RET_NO;
 
-    mnc_hash_delete(it_free);
+    mnc_do_hash_delete(it_free);
     mnc_do_slabs_free(it_free, ITEM_alloc_len(it_free->nkey, it_free->ndata), id); 
     return RET_YES;
 }

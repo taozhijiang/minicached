@@ -7,6 +7,19 @@
 extern "C" {
 #endif //__cplusplus 
 
+/**
+ * 这里总结一下，本系统用了三套锁，分别是:
+ *  pthread_mutex_t *mnc_item_locks;
+ *  pthread_mutex_t slab_lock;
+ *  slabclass_t.lru_lock;
+ *  
+ *  为了防止死锁，必须按照上面的顺序按需求加锁
+ */
+
+
+//分配、释放slab操作时候的大锁
+extern pthread_mutex_t slab_lock;
+
 // sizes包含item的头部，所以不是实际的负载大小
 enum mnc_slab_sz_index  {
     SZ_64 = 0, SZ_128, SZ_256, SZ_512, 
@@ -34,9 +47,6 @@ typedef struct {
     pthread_mutex_t lru_lock; 
 
 } slabclass_t;
-
-//分配、释放slab操作时候的大锁
-extern pthread_mutex_t slab_lock;
 
 
 RET_T mnc_slab_init(void);

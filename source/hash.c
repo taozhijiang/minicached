@@ -22,7 +22,7 @@ RET_T mnc_hash_init(void)
     return RET_YES;
 }
 
-mnc_item* hash_find(const void* key, const size_t nkey)
+mnc_item* mnc_do_hash_find(const void* key, const size_t nkey)
 {
     mnc_item *head = NULL;
     mnc_item *it = NULL;
@@ -46,7 +46,7 @@ mnc_item* hash_find(const void* key, const size_t nkey)
 /** 
  * 查找到对应元素列表的前一个位置，主要是删除时候使用 
  * NICE function */ 
-static mnc_item** hash_find_pre(const void* key, const size_t nkey)
+static mnc_item** hash_do_find_pre(const void* key, const size_t nkey)
 {
     mnc_item **p_pos = NULL;
     uint32_t hv = hash(key, nkey);
@@ -62,7 +62,7 @@ static mnc_item** hash_find_pre(const void* key, const size_t nkey)
 
 /* item_lock already hold before*/
 
-RET_T mnc_hash_insert(mnc_item *it)
+RET_T mnc_do_hash_insert(mnc_item *it)
 {
     mnc_item* head = NULL;
     uint32_t hv = hash(ITEM_key(it), it->nkey); 
@@ -79,9 +79,9 @@ RET_T mnc_hash_insert(mnc_item *it)
     return RET_YES;
 }
 
-RET_T mnc_hash_delete(mnc_item *it)
+RET_T mnc_do_hash_delete(mnc_item *it)
 {
-    mnc_item **before = hash_find_pre(ITEM_key(it), it->nkey); 
+    mnc_item **before = hash_do_find_pre(ITEM_key(it), it->nkey); 
     mnc_item *nxt = NULL;
 
     assert(*before);
@@ -102,7 +102,7 @@ RET_T mnc_hash_delete(mnc_item *it)
 }
 
 // destroy everything linked in the hashtable
-RET_T mnc_hash_destroy(void)
+RET_T mnc_do_hash_destroy(void)
 {
     return RET_YES;
 }

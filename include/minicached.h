@@ -68,8 +68,8 @@ extern RET_T mnc_init();
  */
 mnc_item *mnc_new_item(const void *key, size_t nkey, time_t exptime, int nbytes);
 mnc_item* mnc_get_item_l(const void* key, const size_t nkey);
-RET_T mnc_link_item_l(mnc_item *it);
-RET_T mnc_unlink_item_l(mnc_item *it);
+void mnc_link_item_l(mnc_item *it);
+void mnc_unlink_item_l(mnc_item *it);
 RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata);
 void mnc_remove_item(mnc_item *it);
 void mnc_update_item(mnc_item *it, bool force);

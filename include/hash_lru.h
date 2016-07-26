@@ -40,9 +40,9 @@ static inline void item_unlock(uint32_t hv) {
 
 extern RET_T mnc_hash_init(void);
 
-mnc_item* hash_find(const void* key, const size_t nkey);
-RET_T mnc_hash_insert(mnc_item *it);
-RET_T mnc_hash_delete(mnc_item *it);
+mnc_item* mnc_do_hash_find(const void* key, const size_t nkey);
+RET_T mnc_do_hash_insert(mnc_item *it);
+RET_T mnc_do_hash_delete(mnc_item *it);
 
 
 /*
@@ -55,8 +55,8 @@ RET_T mnc_hash_delete(mnc_item *it);
 
 // LRU related item
 RET_T mnc_lru_init(void);
-RET_T mnc_lru_insert(mnc_item *it);
-RET_T mnc_lru_delete(mnc_item *it);
+void mnc_lru_insert(mnc_item *it);
+void mnc_lru_delete(mnc_item *it);
 
 extern mnc_item* mnc_do_fetch_expired(unsigned int id);
 extern mnc_item* mnc_do_fetch_lru_last(unsigned int id);
