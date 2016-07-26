@@ -44,7 +44,17 @@ typedef struct _mnc_item {
     uint8_t     data[];    // key + NULL + data, [] not include in sizeof
 } mnc_item, *p_mnc_item;
 
-extern volatile time_t    current_time;
+
+typedef volatile unsigned long  atomic_ulong_t;
+
+struct mnc_stat {
+    volatile time_t  current_time;
+    
+    atomic_ulong_t   request_cnt;
+    atomic_ulong_t   hit_cnt;
+};
+extern struct mnc_stat mnc_status;
+
 
 #define ITEM_key(item)  ((char*) &((item)->data)) 
 #define ITEM_dat(item)  ((char*) &((item)->data) + (item)->nkey + 1 )

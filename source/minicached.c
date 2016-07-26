@@ -4,13 +4,15 @@
 #include <signal.h>
 #include <time.h>
 
+// Global status storage
+struct mnc_stat mnc_status;
+
 extern RET_T mnc_items_init(void);
 extern RET_T mnc_hash_init(void);
 extern RET_T mnc_lru_init(void);
 
 #define TM_SIG     SIGUSR2
 static  time_t     realtimer_id;
-volatile time_t    current_time;
 
 /**
  * 只用此处调用更新时间，可以节约很多的系统调用 
@@ -24,7 +26,8 @@ static void timerHandler( int sig, siginfo_t *si, void *uc )
     if (clock_gettime(CLOCK_MONOTONIC, &ts) == -1)
         return;
 
-    current_time = ts.tv_sec;
+    // 这里修改，别处读，不用保护吧
+    mnc_status.current_time = ts.tv_sec; 
 
     //st_d_print("%lu", current_time); //开机以来的时间差
     return;

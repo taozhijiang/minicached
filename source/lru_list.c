@@ -2,9 +2,7 @@
 #include "hash_lru.h"
 
 // 按照从头到尾的LRU访问链表
-// 这些列表是跟slabclass的class_id对应的，暂且没有
-// 发现用单独锁来保护的必要
-
+// 每个slabclass对应一个LRU访问链表，用slabclass.lru_lock进行保护
 static mnc_item *lru_heads[SLAB_SZ_TYPE];
 static mnc_item *lru_tails[SLAB_SZ_TYPE];
 extern slabclass_t mnc_slabclass[SLAB_SZ_TYPE];
@@ -108,7 +106,7 @@ extern mnc_item* mnc_do_fetch_expired(unsigned int id)
 
     for (; ptr != NULL; ptr = ptr->next) 
     {
-        if (ptr->exptime &&  ptr->exptime <= current_time) 
+        if (ptr->exptime &&  ptr->exptime <= mnc_status.current_time) 
         {
             mnc_do_lru_delete(ptr);
             return ptr;

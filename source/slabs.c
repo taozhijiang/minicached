@@ -502,8 +502,10 @@ void mnc_class_statistic(unsigned int id)
     st_d_print("alloc slab count: %lu", p_class->slabs); 
     st_d_print("slab list ptr count: %lu", p_class->slab_list_size); 
     st_d_print("requested bytes: %lu", p_class->requested);
-
     st_d_print("total memory: %lu, already used memory:%lu", mem_limit, mem_allocated); 
+    st_d_print("");
+    st_d_print("total request count: %lu", mnc_status.request_cnt);
+    st_d_print("total hit count: %lu", mnc_status.hit_cnt);
     st_d_print("=========================================");
 
     return;

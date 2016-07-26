@@ -71,7 +71,7 @@ RET_T mnc_hash_insert(mnc_item *it)
     primary_hashtable[hv & hashmask(HASH_POWER)] = it;
 
     it->it_flags |= ITEM_LINKED;
-    it->time = current_time;
+    it->time = mnc_status.current_time;
 
     __sync_add_and_fetch(&hash_item_count, 1);
     st_d_print("HASH CURRENT CNT: %d", hash_item_count);

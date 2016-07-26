@@ -3,7 +3,12 @@
 
 #include "slabs.h"
 
+//对应处理hash容器中链表的保护
 pthread_mutex_t *mnc_item_locks;
+
+// 总的请求次数，以及缓存命中次数
+volatile unsigned long request_cnt;
+volatile unsigned long hit_cnt;
 
 mnc_item* mnc_do_get_item(const void* key, const size_t nkey);
 static void mnc_do_remove_item(mnc_item *it);
@@ -17,7 +22,7 @@ RET_T mnc_items_init(void)
     mnc_item_locks = (pthread_mutex_t *)calloc(item_cnt, sizeof(pthread_mutex_t));
     if (!mnc_item_locks) 
     {
-        st_d_error("Calloc for item failed! [%d*%lu]!", sizeof(pthread_mutex_t), item_cnt);
+        st_d_error("Calloc for item failed! [%lu*%u]!", sizeof(pthread_mutex_t), item_cnt);
         return RET_NO;
     }
 
@@ -56,7 +61,7 @@ mnc_item *mnc_new_item(const void *key, size_t nkey, time_t exptime, int nbytes)
     memcpy(ITEM_key(it), key, nkey);
     if (exptime)
     {
-        it->exptime = exptime + current_time;   //绝对事件
+        it->exptime = exptime + mnc_status.current_time;   //绝对事件
     }
     else
     {
@@ -74,9 +79,13 @@ mnc_item* mnc_get_item_l(const void* key, const size_t nkey)
     mnc_item* ret_i = NULL;
     uint32_t hv = hash(key, nkey);
 
+    __sync_fetch_and_add(&mnc_status.request_cnt, 1);
+
     item_lock(hv);
     ret_i = mnc_do_get_item(key, nkey);
-    item_unlock(hv); 
+    if (ret_i)
+        __sync_fetch_and_add(&mnc_status.hit_cnt, 1);
+    item_unlock(hv);
 
     return ret_i;
 }
@@ -217,7 +226,7 @@ mnc_item* mnc_do_get_item(const void* key, const size_t nkey)
 
     ret_i = hash_find(key, nkey);
 
-    if (ret_i && ret_i->exptime &&  ret_i->exptime <= current_time) 
+    if (ret_i && ret_i->exptime &&  ret_i->exptime <= mnc_status.current_time) 
     {
         mnc_hash_delete(ret_i);
         mnc_lru_delete(ret_i);
@@ -232,7 +241,7 @@ static void mnc_do_remove_item(mnc_item *it)
 {
     if (it)
     {
-        st_d_print("FREEING(%lx)...",  
+        st_d_print("FREEING(%x)...",  
                    hash(ITEM_key(it), it->nkey));
         
         mnc_slabs_free(it, 
@@ -246,13 +255,13 @@ static void mnc_do_remove_item(mnc_item *it)
 // work as touch
 static void mnc_do_update_item(mnc_item *it, bool force)
 {
-    if ((it->time > current_time - ITEM_UPDATE_INTERVAL) && !force) 
+    if ((it->time > mnc_status.current_time - ITEM_UPDATE_INTERVAL) && !force) 
         return;
 
     if (it->it_flags & ITEM_LINKED)
     {
         mnc_lru_delete(it);
-        it->time = current_time;
+        it->time = mnc_status.current_time;
         mnc_lru_insert(it);
     }
 
