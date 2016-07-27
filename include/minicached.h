@@ -19,6 +19,7 @@ extern "C" {
 
 #define ITEM_LINKED    0x01
 #define ITEM_SLABBED   0x02
+#define ITEM_PENDING   0x04   //刚刚申请到的
 
 /**
  * 不仅仅是头部，负载也放置到这个结构体里面 

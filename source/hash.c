@@ -70,6 +70,7 @@ RET_T mnc_do_hash_insert(mnc_item *it)
     it->h_next = primary_hashtable[hv & hashmask(HASH_POWER)]; 
     primary_hashtable[hv & hashmask(HASH_POWER)] = it;
 
+    it->it_flags &= ~ITEM_PENDING;
     it->it_flags |= ITEM_LINKED;
     it->time = mnc_status.current_time;
 
@@ -93,6 +94,7 @@ RET_T mnc_do_hash_delete(mnc_item *it)
         *before = nxt;
 
         it->it_flags &= ~ITEM_LINKED;
+        it->it_flags |= ITEM_PENDING;
 
         __sync_sub_and_fetch(&hash_item_count, 1);
         st_d_print("AFTER DELETE HASH CURRENT CNT: %d", hash_item_count);

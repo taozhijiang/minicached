@@ -195,7 +195,8 @@ static RET_T mnc_do_slabs_destroy(mnc_item* it, unsigned int id)
     
     // 确保释放的是没有保存数据的
     assert( (it->it_flags & ITEM_LINKED) == 0);
-    assert( it->it_flags & ITEM_SLABBED );
+    assert( (it->it_flags & ITEM_PENDING) == 0);
+    assert( (it->it_flags & ITEM_SLABBED) ); 
 
     it->slabs_clsid = 0;    //将会在申请的时候重新初始化
 
@@ -347,7 +348,6 @@ static RET_T mnc_do_slabs_recycle(unsigned int id, double stress)
         {
             it_free = (mnc_item *)((char *)p_class->slab_list[0] + 
                                    i * p_class->size); 
-            assert( it_free->it_flags & ITEM_SLABBED );
 
             // 已经是unlinked的状态了
             mnc_do_slabs_destroy(it_free, i);
@@ -386,7 +386,16 @@ static RET_T mnc_do_slabs_recycle(unsigned int id, double stress)
             mnc_do_slabs_destroy(it_free, id);
             pthread_mutex_unlock(&slab_lock);
         }
-        else if (it_free->it_flags & ITEM_LINKED) 
+        else if (it_free->it_flags & ITEM_PENDING) 
+        {
+            st_d_print("WARN!!!! >>> PENDING FREE....");
+
+            mnc_remove_item(it_free);
+            pthread_mutex_lock(&slab_lock);
+            mnc_do_slabs_destroy(it_free, id);
+            pthread_mutex_unlock(&slab_lock);
+        } 
+        else if (it_free->it_flags & ITEM_LINKED)
         {
             hv = hash(ITEM_key(it_free), it_free->nkey); 
 
@@ -427,7 +436,8 @@ static RET_T mnc_do_slabs_recycle(unsigned int id, double stress)
 
     }
 
-    st_d_print("GOOD, Free Block Page: %p", ptr_free);
+    st_d_print("GOOD, Free Block Page: %p Size:%d ", ptr_free, 
+           (p_class->size * p_class->perslab) );
     pthread_mutex_lock(&slab_lock);
     free(ptr_free);
     p_class->slab_list[p_class->slabs-1] = NULL;
@@ -505,6 +515,15 @@ extern void mnc_mem_cleanup(void)
                     mnc_do_slabs_destroy(it_free, id);
                     pthread_mutex_unlock(&slab_lock);
                 }
+                else if (it_free->it_flags & ITEM_PENDING) 
+                {
+                    st_d_print("WARN!!!!>>> PENDING FREE....");
+
+                    mnc_remove_item(it_free);
+                    pthread_mutex_lock(&slab_lock);
+                    mnc_do_slabs_destroy(it_free, id);
+                    pthread_mutex_unlock(&slab_lock);
+                } 
                 else if (it_free->it_flags & ITEM_LINKED) 
                 {
                     hv = hash(ITEM_key(it_free), it_free->nkey); 

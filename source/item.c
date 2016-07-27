@@ -74,6 +74,7 @@ static mnc_item *_mnc_new_item_internel(const void *key, size_t nkey,
     memset(ITEM_key(it), 0, nkey + nbytes + 1);
     it->nkey = nkey;
     it->ndata = 0;
+    it->it_flags |= ITEM_PENDING;
     memcpy(ITEM_key(it), key, nkey);
     if (exptime)
     {
