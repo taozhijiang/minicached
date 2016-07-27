@@ -11,7 +11,7 @@ SHELL = /bin/bash
 VERSION = 1.0
 SRC_DIRS = ../source
 TEST_SRC_DIRS = ./
-EXTRAFLAGS = -I../include -lcrypto -lrt -ljson-c -isystem -Wall -Wextra -lpthread
+EXTRAFLAGS = -I../include -lcrypto -lrt -ljson-c -Wall -Wextra -lpthread
 
 OBJDIR = ../obj
 TEST_OBJDIR= ./obj

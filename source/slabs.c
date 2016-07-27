@@ -60,7 +60,7 @@ static RET_T mnc_do_slabs_move(mnc_item* it_src, mnc_item* it_des,
 extern RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id);
 static RET_T mnc_do_slabs_destroy(mnc_item* it, unsigned int id);
 static RET_T mnc_do_slabs_newslab(unsigned int id);
-static void mnc_slabs_rebalance(unsigned int id);
+static RET_T mnc_slabs_rebalance(unsigned int id);
 
 
 extern void mnc_lru_expired(unsigned int id);
@@ -75,6 +75,7 @@ extern void mnc_lru_trim(unsigned int id);
 void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags, int hold_lock) 
 {
     void *ret;
+    RET_T r_t = RET_NO;
 
     pthread_mutex_lock(&slab_lock); 
     ret = mnc_do_slabs_alloc(size, id, flags);
@@ -92,7 +93,7 @@ void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags, int hold
 
     pthread_mutex_lock(&slab_lock); 
     st_d_print("alloc newslab");
-    mnc_do_slabs_newslab(id);   //需要slab_class保护
+    mnc_do_slabs_newslab(id);   //需要slab_lock保护
     ret = mnc_do_slabs_alloc(size, id, flags);
     pthread_mutex_unlock(&slab_lock);
     if (ret)
@@ -103,12 +104,17 @@ void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags, int hold
     if (!hold_lock)
     {
         st_d_print("rebalance slab_class");
-        mnc_slabs_rebalance(id);
-        pthread_mutex_lock(&slab_lock); 
-        ret = mnc_do_slabs_alloc(size, id, flags);
-        pthread_mutex_unlock(&slab_lock);
-        if (ret)
-            return ret;
+        r_t = mnc_slabs_rebalance(id);
+        if(r_t == RET_YES)
+        {
+            pthread_mutex_lock(&slab_lock);
+            mnc_do_slabs_newslab(id);   //需要slab_lock保护
+            ret = mnc_do_slabs_alloc(size, id, flags);
+            pthread_mutex_unlock(&slab_lock);
+
+            if (ret)
+                return ret;
+        }
     }
 
     st_d_print("lru trim schema");
@@ -188,6 +194,8 @@ extern RET_T mnc_do_slabs_free(void *ptr, size_t size, unsigned int id)
     return RET_YES;
 }
 
+// 主要是释放内存的时候，或者强行item_move的时候，将其从
+// slab_class空闲队列中删除
 static RET_T mnc_do_slabs_destroy(mnc_item* it, unsigned int id)
 {
     slabclass_t *p_class;
@@ -215,6 +223,8 @@ static RET_T mnc_do_slabs_destroy(mnc_item* it, unsigned int id)
             it->prev->next = it->next;
     }
 
+    it->next = NULL;
+    it->prev = NULL;
     p_class->sl_curr--;
 
     return RET_YES;
@@ -237,16 +247,22 @@ static RET_T mnc_do_slabs_move(mnc_item* it_src, mnc_item* it_des,
     mnc_do_hash_delete(it_src);
     mnc_lru_delete(it_src);
 
+    // 从slots空闲链表中提取出来
+    mnc_do_slabs_destroy(it_des, id);
+
     it_des->time = it_src->time;
     it_des->exptime = it_src->exptime;
     it_des->slabs_clsid = it_src->slabs_clsid;
     it_des->it_flags &= ~ITEM_SLABBED;
+    it_des->it_flags |= ITEM_PENDING; 
     it_des->nkey = it_src->nkey;
     it_des->ndata = it_src->ndata;
 
-    memcpy(it_des->data, it_src->data, p_class->size);
+    memcpy(it_des->data, it_src->data, p_class->size-sizeof(mnc_item) );
     mnc_do_hash_insert(it_des);
     mnc_lru_insert(it_des);
+
+    //st_d_print("MOVING FROM (%p) to (%p)...", it_src, it_des);
 
     return RET_YES;
 }
@@ -438,7 +454,7 @@ static RET_T mnc_do_slabs_recycle(unsigned int id, double stress)
 
     st_d_print("GOOD, Free Block Page: %p Size:%d ", ptr_free, 
            (p_class->size * p_class->perslab) );
-    pthread_mutex_lock(&slab_lock);
+    pthread_mutex_lock(&slab_lock); 
     free(ptr_free);
     p_class->slab_list[p_class->slabs-1] = NULL;
     -- p_class->slabs;
@@ -451,7 +467,7 @@ static RET_T mnc_do_slabs_recycle(unsigned int id, double stress)
 }
 
 
-static void mnc_slabs_rebalance(unsigned int id)
+static RET_T mnc_slabs_rebalance(unsigned int id)
 {
     signed int i = 0;
     signed int j = 0;
@@ -467,7 +483,7 @@ static void mnc_slabs_rebalance(unsigned int id)
             continue;
 
         if(mnc_do_slabs_recycle(i, 3.0) == RET_YES)
-            return;
+            return RET_YES;
     }
 
     for (i=SLAB_SZ_TYPE-1; i>=0; --i)
@@ -476,10 +492,10 @@ static void mnc_slabs_rebalance(unsigned int id)
             continue;
 
         if(mnc_do_slabs_recycle(i, 1.0) == RET_YES)
-            return;
+            return RET_YES;
     }
 
-    return;
+    return RET_NO;
 }
 
 

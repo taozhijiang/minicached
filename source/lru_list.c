@@ -35,13 +35,12 @@ void mnc_lru_insert(mnc_item *it)
 
 void mnc_lru_delete(mnc_item *it)
 {
-    RET_T ret;
     unsigned int id = it->slabs_clsid;
 
     assert(id < SLAB_SZ_TYPE);
 
     pthread_mutex_lock(&mnc_slabclass[id].lru_lock);
-    ret = mnc_do_lru_delete(it);
+    mnc_do_lru_delete(it);
     pthread_mutex_unlock(&mnc_slabclass[id].lru_lock);
 
     return;
