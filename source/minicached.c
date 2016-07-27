@@ -66,7 +66,7 @@ extern RET_T mnc_timer_init(void)
     return RET_YES;
 }
 
-extern RET_T mnc_init()
+extern RET_T mnc_init(void)
 {
     if(mnc_items_init() == RET_NO)
         exit(EXIT_FAILURE);
@@ -87,4 +87,3 @@ extern RET_T mnc_init()
 
     return RET_YES;
 }
-

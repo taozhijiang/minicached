@@ -7,8 +7,8 @@
 pthread_mutex_t *mnc_item_locks;
 
 mnc_item* mnc_do_get_item(const void* key, const size_t nkey);
-static void mnc_do_remove_item(mnc_item *it);
 static void mnc_do_update_item(mnc_item *it, bool force);
+static void mnc_do_remove_item(mnc_item *it);
 
 RET_T mnc_items_init(void)
 {
@@ -43,9 +43,19 @@ RET_T mnc_items_init(void)
 // void mnc_update_item(mnc_item *it, bool force);
 // 
 
+static mnc_item *_mnc_new_item_internel(const void *key, size_t nkey, 
+                                 time_t exptime, int nbytes, int hold_lock);
 // 创建新的item
 // 内部比较的复杂，设计到内存的分配、回收等操作
 mnc_item *mnc_new_item(const void *key, size_t nkey, time_t exptime, int nbytes) 
+{
+    return _mnc_new_item_internel(key, nkey, exptime, nbytes, 0) ;
+}
+
+// 创建新的item，主要是内部调用，调用者可能持有hv锁，此时
+// 不做rebalance操作，防止产生死锁
+static mnc_item *_mnc_new_item_internel(const void *key, size_t nkey, 
+                                 time_t exptime, int nbytes, int hold_lock) 
 {
     mnc_item *it;
     /* do_item_alloc handles its own locks */
@@ -54,7 +64,7 @@ mnc_item *mnc_new_item(const void *key, size_t nkey, time_t exptime, int nbytes)
     if (class_id < 0)
         return NULL;
 
-    it = (mnc_item *)mnc_slabs_alloc(ITEM_alloc_len(nkey, nbytes), class_id, 0);
+    it = (mnc_item *)mnc_slabs_alloc(ITEM_alloc_len(nkey, nbytes), class_id, 0, hold_lock); 
     if (!it)
     {
         st_d_error("Malloc slabs item error!");
@@ -163,7 +173,7 @@ RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata)
     st_d_print("重新更新内存块！");
 
     // 重新分配空间情况
-    mnc_item *new_it = mnc_new_item(ITEM_key(p_it), p_it->nkey, p_it->exptime, ndata); 
+    mnc_item *new_it = _mnc_new_item_internel(ITEM_key(p_it), p_it->nkey, p_it->exptime, ndata, 1); 
     if (!new_it)
     {
         st_d_error("新分配错误%lu！", ndata);

@@ -54,7 +54,7 @@ typedef struct {
 RET_T mnc_slab_init(void);
 int mnc_slabs_clsid(const size_t size);
 RET_T mnc_slabs_free(void *ptr, size_t size, unsigned int id);
-void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags);
+void *mnc_slabs_alloc(size_t size, unsigned int id, unsigned int flags, int hold_lock);
 
 void mnc_class_statistic(unsigned int id);
 unsigned int mnc_item_slab_size(const mnc_item* it);

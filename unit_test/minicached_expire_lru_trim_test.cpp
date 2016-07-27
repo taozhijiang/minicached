@@ -95,6 +95,7 @@ RET_T mnc_lru_trim_test(void)
     char* msg_fmt = "%d";
     char msg[512];
 
+    st_d_print("STAGE-I");
     key = 0x1;
     for (i=0; i<4; i++)
     {
@@ -109,6 +110,7 @@ RET_T mnc_lru_trim_test(void)
     }
 
     // LRU 淘汰
+    st_d_print("STAGE-II");
     key = 0x10;
     for (i=0; i<8; i++)
     {
@@ -127,9 +129,12 @@ RET_T mnc_lru_trim_test(void)
         ++key;
     }
 
+    st_d_print("STAGE-III");
     //0x10 11 12 13  14 15 16 17
     key = 0x50;
     it = mnc_new_item(&key, sizeof(int), 0, 512*1024-sizeof(mnc_item)-sizeof(int)-1);
+    // acutually, not linked here!
+
     key = 0x15;
     assert(mnc_get_item_l(&key, sizeof(int)));
     key = 0x16;
@@ -139,6 +144,7 @@ RET_T mnc_lru_trim_test(void)
 
     mnc_class_statistic(mnc_slabs_clsid(512*1024-sizeof(mnc_item)-sizeof(int)-1)); 
 
+    mnc_mem_cleanup();
     st_d_print("DONE!");
 
     return RET_YES;

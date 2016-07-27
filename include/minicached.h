@@ -30,6 +30,8 @@ typedef struct _mnc_item {
     time_t      exptime;    /* expire time */
 
                             /* Protected by sbclass_lock */
+    // 空闲的时候用于挂在slots空闲链表上，使用的时候用于
+    // lru_head, lru_tail队列中
     struct _mnc_item *next;
     struct _mnc_item *prev;
 
@@ -60,8 +62,8 @@ extern struct mnc_stat mnc_status;
 #define ITEM_dat(item)  ((char*) &((item)->data) + (item)->nkey + 1 )
 #define ITEM_alloc_len(nkey, ndata) (sizeof(mnc_item) + nkey + 1 + ndata)
 
-extern RET_T mnc_init();
-
+extern RET_T mnc_init(void);
+extern void mnc_mem_cleanup(void);
 
 /**
  * TOTAL ITEM API

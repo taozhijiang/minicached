@@ -23,16 +23,20 @@ RET_T mnc_item_test_int_key(void)
     mnc_item* g_it_old = NULL;
 
 
-    it = mnc_new_item(&i_key, key_len, 4, strlen(msg)+1);
+    it = mnc_new_item(&i_key, key_len, 2, strlen(msg)+1);
     mnc_link_item_l(it);
     mnc_store_item_l(&it, msg, strlen(msg)+1);
     g_it = mnc_get_item_l(&i_key, key_len);
     assert(g_it);
     st_d_print("VALUE1:%s", ITEM_dat(g_it)); 
 
-    mnc_sleep(7);
+    mnc_sleep(4);
     assert(!mnc_get_item_l(&i_key, key_len));
     st_d_print("good, expired item can not be got!");
+
+    mnc_mem_cleanup();
+
+    st_d_print("DONE!");
 
     return RET_YES;
 }
@@ -87,6 +91,10 @@ RET_T mnc_item_test_char_key(void)
     mnc_remove_item(g_it);
     assert(!mnc_get_item_l(key, key_len));
 
+    mnc_mem_cleanup();
+
+    st_d_print("DONE!");
+
     return RET_YES;
 }
 
@@ -118,6 +126,10 @@ RET_T mnc_item_test_lru_touch(void)
 
     mnc_unlink_item_l(it);
     mnc_remove_item(it);
+
+    mnc_mem_cleanup();
+
+    st_d_print("DONE!");
 
     return RET_YES;
 }

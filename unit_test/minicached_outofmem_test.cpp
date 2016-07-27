@@ -51,6 +51,7 @@ RET_T mnc_out_of_memory_test(void)
     }
 
     st_d_print("!!! STAGE-III !!!");
+    key = 0x1;
     for (i=0; i<6; i++)
     {
         it = mnc_new_item(&key, sizeof(int), 0, 512*1024-sizeof(mnc_item)-sizeof(int)-1);
@@ -63,6 +64,8 @@ RET_T mnc_out_of_memory_test(void)
 
         ++key;
     }
+
+    mnc_mem_cleanup();
 
     return RET_YES;
 }
