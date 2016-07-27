@@ -4,7 +4,7 @@
 #include <json-c/json_tokener.h>
 
 #include "gtest/gtest.h"
-extern size_t mem_limit;
+extern size_t minicached_mem_limit;
 
 static RET_T load_settings(void)
 {
@@ -15,16 +15,15 @@ static RET_T load_settings(void)
     if( ! (p_obj = json_object_from_file("settings.json")) )
         return RET_NO;
 
-    if(json_object_object_get_ex(p_obj,"settings",&p_class))
+    minicached_mem_limit = 64 * 1024 * 1024; //default 64M
+    if(json_object_object_get_ex(p_obj,"minicached",&p_class))
     {
         if (json_object_object_get_ex(p_class,"total_mem",&p_store_obj))
-            mem_limit = json_object_get_int(p_store_obj) * 1024 * 1024; 
-        else
-            mem_limit = 64 * 1024 * 1024; //default 64M
+            minicached_mem_limit = json_object_get_int(p_store_obj) * 1024 * 1024;
     }
 
     // dump settings
-    st_d_print("TOTAL MEMORY: %lu", mem_limit);
+    st_d_print("TOTAL MEMORY: %lu", minicached_mem_limit);
 
     return RET_YES;
 }

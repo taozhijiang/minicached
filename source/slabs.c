@@ -1,8 +1,8 @@
 #include "slabs.h"
 #include "hash_lru.h"
 
-size_t mem_limit = 0;     //最大内存限制
-static size_t mem_allocated = 0;  //已经使用内存
+size_t minicached_mem_limit = 0;    //最大内存限制
+static size_t mem_allocated = 0;    //已经使用内存
 
 //分配、释放slab操作时候的大锁
 pthread_mutex_t slab_lock;
@@ -273,10 +273,10 @@ static RET_T mnc_do_slabs_newslab(unsigned int id)
     unsigned int i = 0;
     unsigned int slab_len = p_class->perslab * p_class->size;
     
-    if (( slab_len + mem_allocated) > mem_limit) 
+    if (( slab_len + mem_allocated) > minicached_mem_limit) 
     {
         st_d_error("out of memory: already %lu, request %d, total %lu", mem_allocated,
-                   p_class->perslab * p_class->size, mem_limit);
+                   p_class->perslab * p_class->size, minicached_mem_limit);
         return RET_NO; 
     }
 
@@ -291,7 +291,7 @@ static RET_T mnc_do_slabs_newslab(unsigned int id)
     {
         int new_list_size = 0;
         if (p_class->slab_list_size == 0) 
-            new_list_size = mem_limit / slab_len / 3;
+            new_list_size = minicached_mem_limit / slab_len / 3;
         else
             new_list_size = p_class->slab_list_size * 2;
 
@@ -461,7 +461,8 @@ static RET_T mnc_do_slabs_recycle(unsigned int id, double stress)
     mem_allocated -= p_class->size * p_class->perslab;
     pthread_mutex_unlock(&slab_lock);
 
-    st_d_print("total memory: %lu, already used memory:%lu", mem_limit, mem_allocated); 
+    st_d_print("total memory: %lu, already used memory:%lu", 
+                    minicached_mem_limit, mem_allocated); 
 
     return RET_YES;
 }
@@ -569,7 +570,8 @@ extern void mnc_mem_cleanup(void)
         }
     }
 
-    st_d_print("total memory: %lu, already used memory:%lu", mem_limit, mem_allocated); 
+    st_d_print("total memory: %lu, already used memory:%lu", 
+                            minicached_mem_limit, mem_allocated); 
 
     return;
 }
@@ -588,10 +590,24 @@ void mnc_class_statistic(unsigned int id)
     st_d_print("alloc slabs count: %u", p_class->slabs); 
     st_d_print("slab list ptr count: %u", p_class->slab_list_size); 
     st_d_print("requested bytes: %luKB", p_class->requested/1024);
-    st_d_print("total memory: %luKB, already used memory:%luKB", mem_limit/1024, mem_allocated/1024); 
+    st_d_print("total memory: %luKB, already used memory:%luKB", 
+                            minicached_mem_limit/1024, mem_allocated/1024); 
     st_d_print("");
     st_d_print("total request count: %lu", mnc_status.request_cnt);
-    st_d_print("total hit count: %lu", mnc_status.hit_cnt);
+    st_d_print("total cache hit count: %lu", mnc_status.hit_cnt);
+    st_d_print("=========================================");
+
+    return;
+}
+
+
+void mnc_general_statistic(void)
+{
+    st_d_print("=========================================");
+    st_d_print("total memory: %luKB, already used memory:%luKB", 
+                            minicached_mem_limit/1024, mem_allocated/1024); 
+    st_d_print("total request count: %lu", mnc_status.request_cnt);
+    st_d_print("total cache hit count: %lu", mnc_status.hit_cnt);
     st_d_print("=========================================");
 
     return;

@@ -1,6 +1,6 @@
 {
-    "settings":
+    "minicached":
     {
-        "total_mem": 10,        // memory size, unit MB
+        "total_mem": 2,        // memory size, unit MB
     }
 }

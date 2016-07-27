@@ -56,8 +56,9 @@ struct mnc_stat {
     atomic_ulong_t   request_cnt;
     atomic_ulong_t   hit_cnt;
 };
-extern struct mnc_stat mnc_status;
 
+extern struct mnc_stat mnc_status;
+void mnc_general_statistic(void);
 
 #define ITEM_key(item)  ((char*) &((item)->data)) 
 #define ITEM_dat(item)  ((char*) &((item)->data) + (item)->nkey + 1 )
