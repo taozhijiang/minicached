@@ -1,25 +1,24 @@
-This project was deeply inspired by [memcached](https://github.com/memcached/memcached), which has been widely used in production environment for long time. It is really great for large project, and can be easly extended because the network inter-process communication method. However, I think some relative small and host-standalone application can still greatly benefit from memory-based cache method, but the network inter-process communication seems much more heavy. So I create this project, hope for the general memory-based cache libray, offering simple interface, and can be link with any linux application conviently and more efficiently.   
+This project is deeply inspired by the [memcached](https://github.com/memcached/memcached), which has been widely used in production environment for long time. I think it is a really great design for large project, and can be easly extended because of the network inter-process communication. I think some relatively small and host-standalone application can still greatly benefit from memory-based cache method, but the network inter-process communication seems much more heavy. So I create this project, hope to work as a general memory-based cache libray, offering simple interface, and can be link with any linux application conveniently and more efficiently.   
 
-Without the network part, the project can be simplified without libevent, CAS data intergration, information exchange protocal and so on, pthread_mutex_t seems enough for the sync purpose.   
+Without the network part, the project can be simplified without libevent, CAS data intergration, information exchange protocal and so on, pthread_mutex_t seems quit enough for the sync and protect purpose.   
 
-Well, the code can not compare with the original memcached project for the quality and elegance, but I will try my best to refine it, and more test-cases are on the way. Any advance and pull request are welcome.   
+Well, the code can not compare with the original memcached project on quality and elegance, but I will try my best to refine it, and more test-cases are on the way. Any advice and pull requests are welcome.   
 
 
 # 1. Build   
 ```bash
 user@gentoo minicached % make 
 user@gentoo minicached % make -f Makefile_R
-user@gentoo minicached % 
 ```
-general make command will using the source/main.c and output a executable program as Debug/minicached, if you just need libminicached.a library, using the alternate make -f Makefile_R   
+general make command will using the source/main.c and output a executable program as Debug/minicached, so you can add your code within this project. But if you just need libminicached.a library, using the alternate make -f Makefile_R.   
    
-It is highly recommand for your own unit_test, for it is not strongly tested under production environment. You can install googletest and come to unit_test directory:   
+It is highly recommended for your own unit_test, for it has not been strongly and strictly tested under production environment. You can install [googletest](https://github.com/google/googletest) and come to unit_test directory:   
 ```bash
 user@gentoo minicached % cd unit_test 
 user@gentoo unit_test % make
 user@gentoo unit_test % ./minicached_unit_test 
 ```
-If all went well, you will get the message like this:   
+If all go well, you will get the test result message like this:   
 ```bash
 [----------] Global test environment tear-down
 [==========] 6 tests from 6 test cases ran. (13002 ms total)
@@ -29,8 +28,8 @@ user@gentoo unit_test %
 
 
 # 2. General function and API offered   
-This library is designed for general object cache, so the key and value is not stricted to char*, just tell the api your address and len, all will be done!   
-Current apis cover as:   
+This library is designed for general object memory-based cache, so the key and value is not stricted to char*, just tell the fucntion your object address and len, all will be done!   
+Current apis:   
 ```bash
 mnc_item *mnc_new_item(const void *key, size_t nkey, time_t exptime, int nbytes);
 mnc_item* mnc_get_item_l(const void* key, const size_t nkey);
@@ -40,11 +39,12 @@ RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata);
 void mnc_remove_item(mnc_item *it);
 void mnc_update_item(mnc_item *it, bool force);
 ```
-The best tutorials are the test_cases. If you understand you can benefit from cached schema, I do believe you are smart enough to refer to the test_cases. Anyway, you can contact me if you wish.   
+The best tutorials are the test_cases. If you do believe you can benefit from cached schema, then I do believe you are smart enough to refer to the test_cases. Anyway, you can contact me if you wish.   
+
 
 # 3. Examples or intergrated into your project   
 ## 3.1 Step to go   
-(1) Tell the library which memory you give it dedicated, the unit is MB. just like   
+(1) Tell the library how much memory you will offer for cache, the unit is MB. Adjusting it like   
 ```bash
 user@gentoo unit_test % cat settings.json 
 {
@@ -54,11 +54,12 @@ user@gentoo unit_test % cat settings.json
     }
 }
 ```
-If you do not like this, just export the minicached_mem_limit and assign the proper value to it.   
-(2) Call extern RET_T mnc_init(void);   
+If you do not like settings.json, just export the size_t minicached_mem_limit and assign the proper value to it.   
+(2) Call extern RET_T mnc_init(void) for initlize task;   
 (3) Done!   
 
 ## 3.2 Example Code   
+This is just a example code, like it?   
 ```c
 static const char* cached_fetch_ques_text(ulong s_id, ulong msg_id, 
                                           P_MYSQL_CONN p_conn, char* store)
@@ -94,3 +95,5 @@ static const char* cached_fetch_ques_text(ulong s_id, ulong msg_id,
     return NULL;
 }
 ```
+
+Have fun!
