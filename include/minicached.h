@@ -13,17 +13,17 @@
 
 #include "st_others.h"
 
-#ifdef __cplusplus 
+#ifdef __cplusplus
 extern "C" {
-#endif //__cplusplus 
+#endif //__cplusplus
 
 #define ITEM_LINKED    0x01
 #define ITEM_SLABBED   0x02
 #define ITEM_PENDING   0x04   //刚刚申请到的
 
 /**
- * 不仅仅是头部，负载也放置到这个结构体里面 
- * dat中只考虑二进制情况，所以数据如果本身带NULL，也需要计入， 
+ * 不仅仅是头部，负载也放置到这个结构体里面
+ * dat中只考虑二进制情况，所以数据如果本身带NULL，也需要计入，
  * 中间的一个NULL是PAD用的
  */
 typedef struct _mnc_item {
@@ -51,8 +51,8 @@ typedef struct _mnc_item {
 typedef volatile unsigned long  atomic_ulong_t;
 
 struct mnc_stat {
-    volatile time_t  current_time;
-    
+    time_t            start_time; //软件启动时间
+    volatile time_t  current_time; //运行时间
     atomic_ulong_t   request_cnt;
     atomic_ulong_t   hit_cnt;
 };
@@ -60,7 +60,7 @@ struct mnc_stat {
 extern struct mnc_stat mnc_status;
 void mnc_general_statistic(void);
 
-#define ITEM_key(item)  ((char*) &((item)->data)) 
+#define ITEM_key(item)  ((char*) &((item)->data))
 #define ITEM_dat(item)  ((char*) &((item)->data) + (item)->nkey + 1 )
 #define ITEM_alloc_len(nkey, ndata) (sizeof(mnc_item) + nkey + 1 + ndata)
 
@@ -78,8 +78,8 @@ RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata);
 void mnc_remove_item(mnc_item *it);
 void mnc_update_item(mnc_item *it, bool force);
 
-#ifdef __cplusplus 
+#ifdef __cplusplus
 }
-#endif //__cplusplus 
+#endif //__cplusplus
 
 #endif

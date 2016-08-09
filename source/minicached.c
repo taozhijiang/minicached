@@ -15,8 +15,8 @@ extern RET_T mnc_lru_init(void);
 static  time_t     realtimer_id;
 
 /**
- * 只用此处调用更新时间，可以节约很多的系统调用 
- * CLOCK_MONOTONIC这种时钟更加稳定，不受系统时钟的影响 
+ * 只用此处调用更新时间，可以节约很多的系统调用
+ * CLOCK_MONOTONIC这种时钟更加稳定，不受系统时钟的影响
  */
 static void timerHandler( int sig, siginfo_t *si, void *uc )
 {
@@ -27,10 +27,14 @@ static void timerHandler( int sig, siginfo_t *si, void *uc )
         return;
 
     // 这里修改，别处读，不用保护吧
-    mnc_status.current_time = ts.tv_sec; 
+    mnc_status.current_time = ts.tv_sec;
+
+    if (!mnc_status.start_time)
+        mnc_status.start_time = ts.tv_sec;
 
     //st_d_print("%lu", current_time); //开机以来的时间差
     return;
+
 }
 
 extern RET_T mnc_timer_init(void)
@@ -61,7 +65,7 @@ extern RET_T mnc_timer_init(void)
     its.it_interval.tv_nsec = 0;
     its.it_value.tv_sec = 1;
     its.it_value.tv_nsec = 0;
-    timer_settime(realtimer_id, 0, &its, NULL); 
+    timer_settime(realtimer_id, 0, &its, NULL);
 
     return RET_YES;
 }
