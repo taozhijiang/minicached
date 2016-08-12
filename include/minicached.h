@@ -78,6 +78,10 @@ RET_T mnc_store_item_l(mnc_item **it, const void* dat, const size_t ndata);
 void mnc_remove_item(mnc_item *it);
 void mnc_update_item(mnc_item *it, bool force);
 
+extern struct mnc_stat mnc_status;
+extern time_t mnc_get_current_time(void);
+extern time_t mnc_get_start_time(void);
+
 #ifdef __cplusplus
 }
 #endif //__cplusplus

@@ -70,6 +70,16 @@ extern RET_T mnc_timer_init(void)
     return RET_YES;
 }
 
+extern time_t mnc_get_current_time(void)
+{
+    return mnc_status.current_time;
+}
+
+extern time_t mnc_get_start_time(void)
+{
+    return mnc_status.start_time; 
+}
+
 extern RET_T mnc_init(void)
 {
     if(mnc_items_init() == RET_NO)

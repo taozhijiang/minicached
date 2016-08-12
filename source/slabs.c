@@ -603,14 +603,14 @@ void mnc_class_statistic(unsigned int id)
 
 void mnc_general_statistic(void)
 {
-    time_t diff = mnc_status.current_time - mnc_status.start_time;
+    time_t diff = mnc_get_current_time() - mnc_get_start_time();
 
     st_d_print("=========================================");
     st_d_print("total memory: %luKB, already used memory:%luKB",
                             minicached_mem_limit/1024, mem_allocated/1024);
     st_d_print("total request count: %lu", mnc_status.request_cnt);
     st_d_print("total cache hit count: %lu", mnc_status.hit_cnt);
-    st_d_print("library serve time: %d days, %d hours, %d mins ", diff/(24*60*60),
+    st_d_print("library serve time: %ld days, %ld hours, %ld mins ", diff/(24*60*60),
               (diff%(24*60*60))/(60*60),  (diff%(60*60))/(60));
     st_d_print("=========================================");
 
