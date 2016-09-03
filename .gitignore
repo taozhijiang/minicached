@@ -9,3 +9,4 @@ obj/
 unit_test/*_unit_test
 unit_test/obj/
 unit_test/settings.json
+lib/
