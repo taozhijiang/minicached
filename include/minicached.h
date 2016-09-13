@@ -53,6 +53,7 @@ typedef volatile unsigned long  atomic_ulong_t;
 struct mnc_stat {
     time_t            start_time; //软件启动时间
     volatile time_t  current_time; //运行时间
+    struct tm         curr_tm;       //转换当前时间
     atomic_ulong_t   request_cnt;
     atomic_ulong_t   hit_cnt;
 };
@@ -81,6 +82,7 @@ void mnc_update_item(mnc_item *it, bool force);
 extern struct mnc_stat mnc_status;
 extern time_t mnc_get_current_time(void);
 extern time_t mnc_get_start_time(void);
+extern const struct tm* mnc_get_current_tm(void);
 
 #ifdef __cplusplus
 }

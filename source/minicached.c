@@ -17,17 +17,20 @@ static  time_t     realtimer_id;
 /**
  * 只用此处调用更新时间，可以节约很多的系统调用
  * CLOCK_MONOTONIC这种时钟更加稳定，不受系统时钟的影响
+ *
+ * 使用REALTIME, 因为需要使用时钟源
  */
 static void timerHandler( int sig, siginfo_t *si, void *uc )
 {
     assert(realtimer_id == *(time_t*)(si->si_value.sival_ptr));
 
     struct timespec ts;
-    if (clock_gettime(CLOCK_MONOTONIC, &ts) == -1)
+    if (clock_gettime(CLOCK_REALTIME, &ts) == -1)
         return;
 
     // 这里修改，别处读，不用保护吧
     mnc_status.current_time = ts.tv_sec;
+    localtime_r(&mnc_status.current_time, &mnc_status.curr_tm);
 
     if (!mnc_status.start_time)
         mnc_status.start_time = ts.tv_sec;
@@ -78,6 +81,11 @@ extern time_t mnc_get_current_time(void)
 extern time_t mnc_get_start_time(void)
 {
     return mnc_status.start_time; 
+}
+
+extern const struct tm* mnc_get_current_tm(void)
+{
+    return &mnc_status.curr_tm; 
 }
 
 extern RET_T mnc_init(void)

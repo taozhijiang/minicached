@@ -1,7 +1,3 @@
-[![Language](https://img.shields.io/badge/Language-GCC-green.svg)](https://gcc.gnu.org/) 
-[![Author](https://img.shields.io/badge/author-Nicol%20TAO-blue.svg)](https://taozj.org/) 
-[![License](https://img.shields.io/badge/license-BSD-red.svg)](http://yanyiwu.mit-license.org)
-
 # minicached
 [![Language](https://img.shields.io/badge/Language-GCC-green.svg)](https://gcc.gnu.org/) 
 [![Author](https://img.shields.io/badge/author-Nicol%20TAO-blue.svg)](https://taozj.org/) 
